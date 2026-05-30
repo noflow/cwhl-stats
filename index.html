@@ -229,11 +229,10 @@
   /* ── STANDINGS ── */
   .standings-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 24px;
     margin-bottom: 32px;
   }
-  @media (max-width: 700px) { .standings-grid { grid-template-columns: 1fr; } }
   .division-block { background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); overflow: hidden; }
   .division-title {
     background: var(--teal);
@@ -961,6 +960,8 @@ async function loadStandings() {
         l:   Number(r[3]) || 0,
         otl: Number(r[4]) || 0,
         pts: Number(r[5]) || 0,
+        gf:  Number(r[6]) || 0,
+        ga:  Number(r[7]) || 0,
       };
     });
 
@@ -983,7 +984,7 @@ async function loadStandings() {
           return data;
         }
       }
-      return { gp:0, w:0, l:0, otl:0, pts:0 };
+      return { gp:0, w:0, l:0, otl:0, pts:0, gf:0, ga:0 };
     }
 
     let html = "";
@@ -999,14 +1000,14 @@ async function loadStandings() {
           <div class="division-title"><span>&#9670;</span>${divName}</div>
           <table class="stand-table">
             <thead><tr>
-              <th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th>
+              <th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th>
             </tr></thead>
             <tbody>
               ${divTeams.map((t,i) => `
                 <tr>
                   <td>${t.name}</td>
                   <td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${t.otl}</td>
-                  <td class="pts-bold">${t.pts}</td>
+                  <td class="pts-bold">${t.pts}</td><td>${t.gf}</td><td>${t.ga}</td>
                 </tr>`).join("")}
             </tbody>
           </table>
