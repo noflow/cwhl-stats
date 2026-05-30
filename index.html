@@ -814,6 +814,27 @@ async function fetchTab(tabName) {
 }
 
 // Fetch from the SOURCE (scraper) sheet instead of publish sheet
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"' && text[i+1] === '"') { field += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else { field += ch; }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === ',') { row.push(field); field = ""; }
+      else if (ch === '\n') { row.push(field); if (row.length) rows.push(row); row = []; field = ""; }
+      else if (ch === '\r') { }
+      else { field += ch; }
+    }
+  }
+  if (field || row.length) { row.push(field); if (row.length) rows.push(row); }
+  return rows;
+}
+
 async function fetchSourceTab(tabName) {
   // Use gviz CSV output — served via gviz (no CORS issues) AND
   // returns raw text values so "123+456" match IDs are preserved as-is
