@@ -699,6 +699,22 @@
     </div>
   </div>
 
+
+  <!-- RECENT GAMES -->
+  <div class="page" id="page-games">
+    <div class="section-title">Recent Games</div>
+    <div class="controls">
+      <span class="filter-label">Filter by team:</span>
+      <select class="pos-filter" id="game-team-filter" onchange="filterGames()">
+        <option value="">All Teams</option>
+      </select>
+      <span class="record-count" id="game-count"></span>
+    </div>
+    <div id="games-list">
+      <div class="loading"><div class="spinner"></div>Loading games...</div>
+    </div>
+  </div>
+
 </main>
 
 <footer>CWHL NHL League Stats &mdash; Updated automatically each game night</footer>
@@ -801,8 +817,9 @@ async function fetchSourceTab(tabName) {
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + id).classList.add('active');
-  btn.classList.add('active');
+  const pageEl = document.getElementById('page-' + id);
+  if (pageEl) pageEl.classList.add('active');
+  if (btn) btn.classList.add('active');
 }
 
 // ── SORT STATE ────────────────────────────────────────────────────────────────
