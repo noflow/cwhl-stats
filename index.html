@@ -814,21 +814,56 @@ async function fetchTab(tabName) {
 }
 
 // Fetch from the SOURCE (scraper) sheet instead of publish sheet
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"' && text[i+1] === '"') { field += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else { field += ch; }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === ',') { row.push(field); field = ""; }
+      else if (ch === '\n') { row.push(field); if (row.some(c=>c)) rows.push(row); row = []; field = ""; }
+      else if (ch === '\r') { }
+      else { field += ch; }
+    }
+  }
+  if (field || row.length) { row.push(field); if (row.some(c=>c)) rows.push(row); }
+  return rows;
+}
+
 async function fetchSourceTab(tabName) {
-  // headers=0: ALL rows returned as data (avoids gviz promoting row 1 to headers
-  // and also avoids it evaluating "123+456" match IDs as arithmetic)
+  // Use CSV export — returns raw text values, no formula evaluation.
+  // This correctly handles compound Match IDs like "123+456".
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(tabName)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Fallback to gviz if CSV is blocked
+    return fetchSourceTabGviz(tabName);
+  }
+  const text = await res.text();
+  const allRows = parseCSV(text);
+  if (!allRows.length) return { cols: [], rows: [], numCols: 0 };
+  const cols = allRows[0];
+  const rows = allRows.slice(1).filter(r => r.some(c => String(c||"").trim() !== ""));
+  return { cols, rows, numCols: cols.length };
+}
+
+async function fetchSourceTabGviz(tabName) {
+  // Fallback: gviz with headers=0, formatted values
   const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=0`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
   const json = JSON.parse(text.substring(47, text.length - 2));
   const numCols = json.table.cols.length;
-
   const allRows = (json.table.rows || []).map(r => {
     const cells = [];
     for (let i = 0; i < numCols; i++) {
       const cell = r.c ? r.c[i] : null;
-      // Prefer formatted string (f) — preserves "123+456" as text not a sum
       const val = cell
         ? (cell.f !== null && cell.f !== undefined ? String(cell.f)
           : (cell.v !== null && cell.v !== undefined ? String(cell.v) : ""))
@@ -837,8 +872,6 @@ async function fetchSourceTab(tabName) {
     }
     return cells;
   });
-
-  // Row 0 is the column header row (because headers=0)
   const cols = allRows.length > 0 ? allRows[0] : [];
   const rows = allRows.slice(1).filter(r => r.some(c => c !== ""));
   return { cols, rows, numCols };
