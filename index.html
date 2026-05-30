@@ -624,6 +624,27 @@
   .box-table tbody td { padding: 7px 8px; text-align: center; color: var(--black); white-space: nowrap; }
   .box-table tbody td:first-child { text-align: left; padding-left: 12px; font-weight: 600; color: var(--teal); }
   .box-divider { height: 1px; background: var(--grey2); margin: 0 20px; }
+
+  /* ── DATE GROUPS ── */
+  .date-group { margin-bottom: 28px; }
+  .date-header {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--teal);
+    letter-spacing: 0.5px;
+    padding: 10px 0 10px;
+    border-bottom: 3px solid var(--teal);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .game-card .game-date {
+    font-size: 12px;
+    color: var(--grey3);
+    min-width: 55px;
+    font-weight: 600;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
 </style>
 </head>
 <body>
@@ -794,22 +815,32 @@ async function fetchTab(tabName) {
 
 // Fetch from the SOURCE (scraper) sheet instead of publish sheet
 async function fetchSourceTab(tabName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1`;
+  // headers=0: ALL rows returned as data (avoids gviz promoting row 1 to headers
+  // and also avoids it evaluating "123+456" match IDs as arithmetic)
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=0`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
   const json = JSON.parse(text.substring(47, text.length - 2));
   const numCols = json.table.cols.length;
-  const cols = json.table.cols.map(c => String(c.label || ""));
-  const rows = (json.table.rows || []).map(r => {
+
+  const allRows = (json.table.rows || []).map(r => {
     const cells = [];
     for (let i = 0; i < numCols; i++) {
       const cell = r.c ? r.c[i] : null;
-      const val = cell && cell.v !== null && cell.v !== undefined ? String(cell.v) : "";
+      // Prefer formatted string (f) — preserves "123+456" as text not a sum
+      const val = cell
+        ? (cell.f !== null && cell.f !== undefined ? String(cell.f)
+          : (cell.v !== null && cell.v !== undefined ? String(cell.v) : ""))
+        : "";
       cells.push(val);
     }
     return cells;
   });
+
+  // Row 0 is the column header row (because headers=0)
+  const cols = allRows.length > 0 ? allRows[0] : [];
+  const rows = allRows.slice(1).filter(r => r.some(c => c !== ""));
   return { cols, rows, numCols };
 }
 
@@ -1334,7 +1365,7 @@ async function loadGames() {
     const glIdx = {};
     gl.cols.forEach((c,i) => glIdx[c] = i);
 
-    allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim()); // skip blank rows
+    allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim() !== "" && String(r[0]||"").trim() !== "Match ID"); // skip blank and header rows
 
     // Populate team filter
     const teamNames = new Set();
@@ -1376,21 +1407,37 @@ function renderGames() {
   // Sort newest first by date
   games.sort((a,b) => String(b[glIdx["Date"]]||"").localeCompare(String(a[glIdx["Date"]]||"")));
 
-  document.getElementById("game-count").textContent = `${games.length} games`;
-
-  if (!games.length) {
-    document.getElementById("games-list").innerHTML =
-      `<div class="loading">No games found.</div>`;
-    return;
-  }
-
-  // Store for index-based lookup from onclick
+  // Store for index-based onclick lookup
   window._renderedGames = games;
   window._gameLogCols   = gl.cols;
 
-  const html = `<div class="games-grid">${games.map((r, gameIdx) => {
-    const mid   = String(r[glIdx["Match ID"]]||"").trim();
-    const date  = String(r[glIdx["Date"]]||"").trim();
+  document.getElementById("game-count").textContent = `${games.length} games`;
+
+  if (!games.length) {
+    document.getElementById("games-list").innerHTML = `<div class="loading">No games found.</div>`;
+    return;
+  }
+
+  // Group by date (date portion only)
+  const byDate = {};
+  const dateOrder = [];
+  games.forEach((r, idx) => {
+    const full = String(r[glIdx["Date"]]||"").trim();
+    const dateOnly = full.split(" ")[0];
+    if (!byDate[dateOnly]) { byDate[dateOnly] = []; dateOrder.push(dateOnly); }
+    byDate[dateOnly].push({ r, idx });
+  });
+
+  function formatDateHeader(d) {
+    try {
+      const dt = new Date(d + "T12:00:00");
+      return dt.toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+    } catch(e) { return d; }
+  }
+
+  function gameCard(r, gameIdx) {
+    const fullDate = String(r[glIdx["Date"]]||"").trim();
+    const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
     const t1    = String(r[glIdx["Team 1"]]||"").trim();
     const t2    = String(r[glIdx["Team 2"]]||"").trim();
     const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
@@ -1400,30 +1447,29 @@ function renderGames() {
     const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
     const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
     const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-
     const t1wins = r1 === "Win";
     const t2wins = r2 === "Win";
 
     let badges = "";
-    if (ot)     badges += `<span class="badge ot">OT</span>`;
-    if (lagout) badges += `<span class="badge lgot">LAGOUT</span>`;
-    else if (early) badges += `<span class="badge lgot">MERCY</span>`;
+    if (ot)          badges += `<span class="badge ot">OT</span>`;
+    if (lagout)      badges += `<span class="badge lgot">LAGOUT</span>`;
+    else if (early)  badges += `<span class="badge lgot">MERCY</span>`;
 
     return `<div class="game-card" onclick="openBoxScore(${gameIdx})">
-      <div class="game-date">${date}</div>
+      ${timeOnly ? `<div class="game-date">${timeOnly}</div>` : ""}
       <div class="game-teams">
         <div class="game-team">
-          <div class="game-team-name ${t1wins ? "winner":""}">${t1}</div>
-          <div class="game-badge">${t1wins ? '<span class="badge">W</span>':''}</div>
+          <div class="game-team-name ${t1wins?"winner":""}">${t1}</div>
+          <div class="game-badge">${t1wins?'<span class="badge">W</span>':''}</div>
         </div>
         <div class="game-score-wrap">
-          <div class="game-score ${t1wins ? "":"loser"}">${s1}</div>
+          <div class="game-score ${t1wins?"":"loser"}">${s1}</div>
           <div class="game-sep">–</div>
-          <div class="game-score ${t2wins ? "":"loser"}">${s2}</div>
+          <div class="game-score ${t2wins?"":"loser"}">${s2}</div>
         </div>
         <div class="game-team">
-          <div class="game-team-name ${t2wins ? "winner":""}">${t2}</div>
-          <div class="game-badge">${t2wins ? '<span class="badge">W</span>':''}</div>
+          <div class="game-team-name ${t2wins?"winner":""}">${t2}</div>
+          <div class="game-badge">${t2wins?'<span class="badge">W</span>':''}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -1431,10 +1477,22 @@ function renderGames() {
         <span class="game-arrow">&#8250;</span>
       </div>
     </div>`;
-  }).join("")}</div>`;
+  }
+
+  let html = "";
+  dateOrder.forEach(date => {
+    html += `
+      <div class="date-group">
+        <div class="date-header">${formatDateHeader(date)}</div>
+        <div class="games-grid">
+          ${byDate[date].map(({r,idx}) => gameCard(r,idx)).join("")}
+        </div>
+      </div>`;
+  });
 
   document.getElementById("games-list").innerHTML = html;
 }
+
 
 // ── BOX SCORE MODAL ───────────────────────────────────────────────────────────
 function openBoxScore(gameIdx) {
