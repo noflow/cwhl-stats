@@ -1384,7 +1384,11 @@ function renderGames() {
     return;
   }
 
-  const html = `<div class="games-grid">${games.map(r => {
+  // Store for index-based lookup from onclick
+  window._renderedGames = games;
+  window._gameLogCols   = gl.cols;
+
+  const html = `<div class="games-grid">${games.map((r, gameIdx) => {
     const mid   = String(r[glIdx["Match ID"]]||"").trim();
     const date  = String(r[glIdx["Date"]]||"").trim();
     const t1    = String(r[glIdx["Team 1"]]||"").trim();
@@ -1405,7 +1409,7 @@ function renderGames() {
     if (lagout) badges += `<span class="badge lgot">LAGOUT</span>`;
     else if (early) badges += `<span class="badge lgot">MERCY</span>`;
 
-    return `<div class="game-card" onclick="openBoxScore(${JSON.stringify(mid)}, ${JSON.stringify(r)}, ${JSON.stringify(gl.cols)})">
+    return `<div class="game-card" onclick="openBoxScore(${gameIdx})">
       <div class="game-date">${date}</div>
       <div class="game-teams">
         <div class="game-team">
@@ -1433,16 +1437,21 @@ function renderGames() {
 }
 
 // ── BOX SCORE MODAL ───────────────────────────────────────────────────────────
-function openBoxScore(matchId, gameRow, gameCols) {
+function openBoxScore(gameIdx) {
+  const gameRow  = window._renderedGames[gameIdx];
+  const gameCols = window._gameLogCols;
+  if (!gameRow || !gameCols) return;
+
   const glIdx = {};
   gameCols.forEach((c,i) => glIdx[c] = i);
 
-  const t1 = String(gameRow[glIdx["Team 1"]]||"").trim();
-  const t2 = String(gameRow[glIdx["Team 2"]]||"").trim();
-  const s1 = String(gameRow[glIdx["Team 1 Score"]]||"0").trim();
-  const s2 = String(gameRow[glIdx["Team 2 Score"]]||"0").trim();
+  const t1  = String(gameRow[glIdx["Team 1"]]||"").trim();
+  const t2  = String(gameRow[glIdx["Team 2"]]||"").trim();
+  const s1  = String(gameRow[glIdx["Team 1 Score"]]||"0").trim();
+  const s2  = String(gameRow[glIdx["Team 2 Score"]]||"0").trim();
   const date = String(gameRow[glIdx["Date"]]||"").trim();
   const ot   = String(gameRow[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
+  const matchId = String(gameRow[glIdx["Match ID"]]||"").trim();
 
   document.getElementById("box-scoreline").textContent =
     `${t1}  ${s1} – ${s2}  ${t2}`;
