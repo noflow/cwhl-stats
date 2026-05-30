@@ -1384,7 +1384,10 @@ async function loadGames() {
     const gl = await fetchSourceTab("Game Log");
     gameLogData = gl;
     console.log("Game Log loaded:", gl.rows.length, "rows,", gl.cols.length, "cols");
-    console.log("Game Log all Match IDs:", gl.rows.map(r => r[0]).join(" | "));
+    console.log("Game Log cols[0]:", gl.cols[0]);
+    console.log("Game Log total rows:", gl.rows.length);
+    const lagoutRows = gl.rows.filter(r => /^\d{10,}-\d{10,}/.test(String(r[0]||"").trim()));
+    console.log("Lagout rows found:", lagoutRows.length, lagoutRows.map(r=>r[0]));
 
     console.log("Loading Skater Log...");
     const sl = await fetchSourceTab("Skater Log");
