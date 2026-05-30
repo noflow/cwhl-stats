@@ -563,10 +563,10 @@ async function fetchTab(tabName) {
     const cells = [];
     for (let i = 0; i < numCols; i++) {
       const cell = r.c ? r.c[i] : null;
-      const val = cell
-        ? (cell.f !== null && cell.f !== undefined ? cell.f
-          : (cell.v !== null && cell.v !== undefined ? String(cell.v) : ""))
-        : "";
+      // Always use raw value (v) not formatted (f) to avoid
+      // gviz auto-formatting decimals as percentages
+      const val = cell && cell.v !== null && cell.v !== undefined
+        ? String(cell.v) : "";
       cells.push(String(val));
     }
     return cells;
@@ -583,7 +583,7 @@ function showPage(id, btn) {
 }
 
 // ── SORT STATE ────────────────────────────────────────────────────────────────
-const sortState = { players: {col: 7, dir: -1}, goalies: {col: 10, dir: -1} };
+const sortState = { players: {col: -1, dir: -1}, goalies: {col: -1, dir: -1} };
 
 // ── STANDINGS ─────────────────────────────────────────────────────────────────
 async function loadStandings() {
@@ -684,6 +684,9 @@ async function loadPlayers() {
     const teams = [...new Set(playerData.rows.map(r => String(r[2]||"")).filter(Boolean))].sort();
     const sel = document.getElementById("team-filter");
     teams.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o); });
+    // Set default sort to PTS column by name
+    const ptsIdx = playerData.cols.findIndex(h => h.trim() === "PTS");
+    if (ptsIdx !== -1) sortState.players.col = ptsIdx;
     renderPlayers();
   } catch(e) {
     document.getElementById("player-table-wrap").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
@@ -771,6 +774,8 @@ async function loadGoalies() {
   try {
     const rawG = await fetchTab("Goalie Stats");
     goalieData = { cols: rawG.cols, rows: rawG.rows, numCols: rawG.numCols };
+    const svIdx = goalieData.cols.findIndex(h => h.trim() === "Save %");
+    if (svIdx !== -1) sortState.goalies.col = svIdx;
     renderGoalies();
   } catch(e) {
     document.getElementById("goalie-table-wrap").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
