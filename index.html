@@ -1384,6 +1384,7 @@ async function loadGames() {
     const gl = await fetchSourceTab("Game Log");
     gameLogData = gl;
     console.log("Game Log loaded:", gl.rows.length, "rows,", gl.cols.length, "cols");
+    console.log("Game Log all Match IDs:", gl.rows.map(r => r[0]).join(" | "));
 
     console.log("Loading Skater Log...");
     const sl = await fetchSourceTab("Skater Log");
