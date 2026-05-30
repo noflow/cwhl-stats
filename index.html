@@ -814,68 +814,42 @@ async function fetchTab(tabName) {
 }
 
 // Fetch from the SOURCE (scraper) sheet instead of publish sheet
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = "", inQuote = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuote) {
-      if (ch === '"' && text[i+1] === '"') { field += '"'; i++; }
-      else if (ch === '"') { inQuote = false; }
-      else { field += ch; }
-    } else {
-      if (ch === '"') { inQuote = true; }
-      else if (ch === ',') { row.push(field); field = ""; }
-      else if (ch === '\n') { row.push(field); if (row.some(c=>c)) rows.push(row); row = []; field = ""; }
-      else if (ch === '\r') { }
-      else { field += ch; }
-    }
-  }
-  if (field || row.length) { row.push(field); if (row.some(c=>c)) rows.push(row); }
-  return rows;
-}
-
 async function fetchSourceTab(tabName) {
-  // Use CSV export — returns raw text values, no formula evaluation.
-  // This correctly handles compound Match IDs like "123+456".
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(tabName)}`;
+  // Use gviz CSV output — served via gviz (no CORS issues) AND
+  // returns raw text values so "123+456" match IDs are preserved as-is
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
   const res = await fetch(url);
-  if (!res.ok) {
-    // Fallback to gviz if CSV is blocked
-    return fetchSourceTabGviz(tabName);
-  }
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
   const allRows = parseCSV(text);
   if (!allRows.length) return { cols: [], rows: [], numCols: 0 };
-  const cols = allRows[0];
+  const cols = allRows[0];   // row 0 = header
   const rows = allRows.slice(1).filter(r => r.some(c => String(c||"").trim() !== ""));
   return { cols, rows, numCols: cols.length };
 }
 
 async function fetchSourceTabGviz(tabName) {
-  // Fallback: gviz with headers=0, formatted values
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=0`;
+  // Backup: standard gviz JSON (drops lagout rows with + in match ID)
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = await res.text();
   const json = JSON.parse(text.substring(47, text.length - 2));
   const numCols = json.table.cols.length;
-  const allRows = (json.table.rows || []).map(r => {
+  const cols = json.table.cols.map(c => String(c.label||""));
+  const rows = (json.table.rows||[]).map(r => {
     const cells = [];
     for (let i = 0; i < numCols; i++) {
       const cell = r.c ? r.c[i] : null;
-      const val = cell
-        ? (cell.f !== null && cell.f !== undefined ? String(cell.f)
-          : (cell.v !== null && cell.v !== undefined ? String(cell.v) : ""))
-        : "";
+      const val = cell ? (cell.f !== null && cell.f !== undefined ? String(cell.f)
+                        : (cell.v !== null && cell.v !== undefined ? String(cell.v) : "")) : "";
       cells.push(val);
     }
     return cells;
   });
-  const cols = allRows.length > 0 ? allRows[0] : [];
-  const rows = allRows.slice(1).filter(r => r.some(c => c !== ""));
   return { cols, rows, numCols };
 }
+
 
 // ── PAGE SWITCHING ────────────────────────────────────────────────────────────
 function showPage(id, btn) {
@@ -884,6 +858,8 @@ function showPage(id, btn) {
   const pageEl = document.getElementById('page-' + id);
   if (pageEl) pageEl.classList.add('active');
   if (btn) btn.classList.add('active');
+  // Persist tab in URL hash so refresh stays on same tab
+  history.replaceState(null, "", "#" + id);
 }
 
 // ── SORT STATE ────────────────────────────────────────────────────────────────
@@ -1385,6 +1361,7 @@ async function loadGames() {
     console.log("Loading Game Log...");
     const gl = await fetchSourceTab("Game Log");
     gameLogData = gl;
+    console.log("Game Log loaded:", gl.rows.length, "rows,", gl.cols.length, "cols");
 
     console.log("Loading Skater Log...");
     const sl = await fetchSourceTab("Skater Log");
@@ -1761,6 +1738,16 @@ window.showPage = function(id, btn) {
   _origShowPage(id, btn);
   if (id === 'games' && !gameLogData.cols.length) loadGames();
 };
+
+// Restore active tab from URL hash on load
+(function restoreTab() {
+  const validTabs = ['standings','players','goalies','teams','games'];
+  const hash = window.location.hash.replace('#','');
+  if (validTabs.includes(hash)) {
+    const btn = document.querySelector(`nav button[onclick*="'${hash}'"]`);
+    window.showPage(hash, btn);
+  }
+})();
 </script>
 
 <!-- PLAYER CARD MODAL -->
