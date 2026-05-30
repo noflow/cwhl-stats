@@ -1376,6 +1376,7 @@ function abbrToDisplay(abbr) {
   return ABBR_TO_FULL[abbr] || abbr;
 }
 
+
 async function loadGames() {
   try {
     // Load all three logs from source sheet
@@ -1388,6 +1389,7 @@ async function loadGames() {
     const sl = await fetchSourceTab("Skater Log");
     skaterLogData = sl;
 
+
     console.log("Loading Goalie Log...");
     const gol = await fetchSourceTab("Goalie Log");
     goalieLogData = gol;
@@ -1395,8 +1397,61 @@ async function loadGames() {
     // Build game list sorted newest first
     const glIdx = {};
     gl.cols.forEach((c,i) => glIdx[c] = i);
+    const glMidIdx = glIdx["Match ID"] ?? 0;
 
-    allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim() !== "" && String(r[0]||"").trim() !== "Match ID"); // skip blank and header rows
+    // Strip "+..." suffix from compound match IDs so gviz-dropped lagout rows
+    // can be re-added using just the first match ID.
+    // Also: gviz drops rows where col A has "+" — so we recover them from
+    // the Skater Log by finding match IDs not yet in the game log.
+    gl.rows.forEach(r => {
+      const mid = String(r[glMidIdx]||"").trim();
+      if (mid.includes("+")) r[glMidIdx] = mid.split("+")[0].trim();
+    });
+
+    allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim() !== "" && String(r[0]||"").trim() !== "Match ID");
+    
+    // Find lagout match IDs from Skater Log not already in Game Log
+    const knownMids = new Set(allGamesRaw.map(r => String(r[glMidIdx]||"").trim()));
+    const slMidIdx2 = sl.cols.findIndex(c => c.trim() === "Match ID");
+    const slDateIdx = sl.cols.findIndex(c => c.trim() === "Date");
+    const slTeamIdx = sl.cols.findIndex(c => c.trim() === "Team");
+    const slGoalIdx = sl.cols.findIndex(c => c.trim() === "Goals");
+    const slResIdx  = sl.cols.findIndex(c => c.trim() === "Result");
+
+    // Get unique lagout match IDs from skater log (contain "+")
+    const lagoutMids = [...new Set(
+      sl.rows
+        .map(r => String(r[slMidIdx2]||"").trim())
+        .filter(mid => mid.includes("+"))
+    )];
+
+    lagoutMids.forEach(fullMid => {
+      const firstMid = fullMid.split("+")[0].trim();
+      if (knownMids.has(firstMid)) return; // already have it
+
+      const skRows = sl.rows.filter(r => String(r[slMidIdx2]||"").trim() === fullMid);
+      if (!skRows.length) return;
+
+      const teams = [...new Set(skRows.map(r => String(r[slTeamIdx]||"").trim()))];
+      if (teams.length < 2) return;
+
+      const t1 = teams[0]; const t2 = teams[1];
+      const date = String(skRows[0][slDateIdx]||"").trim();
+      const s1 = skRows.filter(r => r[slTeamIdx]===t1).reduce((a,r)=>a+(parseInt(r[slGoalIdx])||0),0);
+      const s2 = skRows.filter(r => r[slTeamIdx]===t2).reduce((a,r)=>a+(parseInt(r[slGoalIdx])||0),0);
+      const r1 = s1>s2?"Win":s1<s2?"Loss":"Tie";
+      const r2 = s2>s1?"Win":s2<s1?"Loss":"Tie";
+
+      const row = new Array(gl.cols.length).fill("");
+      const set = (col,val) => { const i=gl.cols.findIndex(c=>c===col); if(i!==-1) row[i]=String(val); };
+      set("Match ID", firstMid); set("Date", date); set("Lagout","yes");
+      set("Team 1",t1); set("Team 1 Score",s1); set("Team 1 Result",r1);
+      set("Team 2",t2); set("Team 2 Score",s2); set("Team 2 Result",r2);
+      set("OT","no"); set("Ended Early","no");
+      allGamesRaw.push(row);
+      knownMids.add(firstMid);
+      console.log("Added lagout game:", firstMid, t1, s1, "-", s2, t2);
+    });
 
     // Populate team filter
     const teamNames = new Set();
@@ -1547,22 +1602,22 @@ function openBoxScore(gameIdx) {
   document.getElementById("box-meta").textContent =
     `${date}${ot ? "  •  OT" : ""}  •  Match ${matchId}`;
 
-  // Match IDs can be compound (lagout merges): "123+456"
-  const matchIds = matchId.split("+").map(s => s.trim());
-
-  // Filter skater rows for this match
+  // matchId is now just the first part (e.g. "20330647190485")
+  // Skater/Goalie logs may have the full "20330647190485+20330968880391"
+  // so we match on startsWith to handle both cases
   const skIdx = {};
   skaterLogData.cols.forEach((c,i) => skIdx[c] = i);
-  const skRows = skaterLogData.rows.filter(r =>
-    matchIds.includes(String(r[skIdx["Match ID"]]||"").trim())
-  );
+  const skRows = skaterLogData.rows.filter(r => {
+    const mid = String(r[skIdx["Match ID"]]||"").trim();
+    return mid === matchId || mid.startsWith(matchId + "+") || mid.split("+")[0].trim() === matchId;
+  });
 
-  // Filter goalie rows for this match
   const glGIdx = {};
   goalieLogData.cols.forEach((c,i) => glGIdx[c] = i);
-  const glRows = goalieLogData.rows.filter(r =>
-    matchIds.includes(String(r[glGIdx["Match ID"]]||"").trim())
-  );
+  const glRows = goalieLogData.rows.filter(r => {
+    const mid = String(r[glGIdx["Match ID"]]||"").trim();
+    return mid === matchId || mid.startsWith(matchId + "+") || mid.split("+")[0].trim() === matchId;
+  });
 
   // Split by team
   const teams = [t1, t2];
