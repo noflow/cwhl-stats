@@ -1403,10 +1403,10 @@ async function loadGames() {
     const slMidCheck = sl.cols.findIndex(c => c.trim() === "Match ID");
     const allSlMids = [...new Set(sl.rows.map(r => String(r[slMidCheck]||"").trim()))];
     const lagoutSlMids = allSlMids.filter(m => m.includes("+"));
-    console.log("All unique skater log match IDs with +:", lagoutSlMids);
-    console.log("Game log row count from gviz:", gl.rows.length);
+    console.log("Lagout match IDs in skater log", lagoutSlMids);
+    console.log("Game log rows", gl.rows.length);
     const allGlMids = gl.rows.map(r => String(r[0]||"").trim()).filter(Boolean);
-    console.log("All game log match IDs:", allGlMids);
+    console.log("Game log match IDs", allGlMids);
 
     // Strip "+..." suffix from compound match IDs so gviz-dropped lagout rows
     // can be re-added using just the first match ID.
