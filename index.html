@@ -1405,7 +1405,7 @@ async function loadGames() {
     // the Skater Log by finding match IDs not yet in the game log.
     gl.rows.forEach(r => {
       const mid = String(r[glMidIdx]||"").trim();
-      if (mid.includes("+")) r[glMidIdx] = mid.split("-")[0].trim();
+      if (/^\d{10,}-\d{10,}/.test(mid)) r[glMidIdx] = mid.split("-")[0].trim();
     });
 
     allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim() !== "" && String(r[0]||"").trim() !== "Match ID");
@@ -1422,7 +1422,7 @@ async function loadGames() {
     const lagoutMids = [...new Set(
       sl.rows
         .map(r => String(r[slMidIdx2]||"").trim())
-        .filter(mid => mid.includes("+"))
+        .filter(mid => /^\d{10,}-\d{10,}/.test(mid))
     )];
 
     lagoutMids.forEach(fullMid => {
