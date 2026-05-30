@@ -571,6 +571,28 @@ async function fetchTab(tabName) {
     }
     return cells;
   });
+  // Post-process: gviz returns percentage strings (e.g. "39.5%") as decimals (0.395)
+  // Detect known pct columns by name and reformat them
+  const PCT_COLS = new Set([
+    "Shot %", "Shots On Net %", "Pass %", "Faceoff %",
+    "Breakaway Save %", "Penalty Shot Save %", "Save %",
+    "EV Sh%", "Breakaway Save %", "Penalty Shot Save %",
+  ]);
+  cols.forEach((colName, ci) => {
+    if (!PCT_COLS.has(String(colName).trim())) return;
+    rows.forEach(row => {
+      const v = row[ci];
+      if (v === "" || v === "-") return;
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= 0 && n <= 1) {
+        row[ci] = (n * 100).toFixed(1) + "%";
+      } else if (!isNaN(n) && n > 1) {
+        // Already a percentage number, just add %
+        row[ci] = n.toFixed(1) + "%";
+      }
+    });
+  });
+
   return { cols, rows, numCols };
 }
 
