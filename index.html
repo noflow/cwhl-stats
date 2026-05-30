@@ -764,25 +764,31 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
   console.log("Unique team values in Player Stats col 2:", uniqueTeams);
   console.log("Filtering for abbr:", abbr);
 
-  // Try exact match first, then case-insensitive, then partial name match
+  // Match team value against target abbreviation
+  // Handles: exact abbr match, full name match, case-insensitive, partial
+  const ABBR_TO_KEYWORDS = {
+    "CAR": ["carolina","hurricanes"],
+    "CBJ": ["columbus"],
+    "SJS": ["san jose","sharks"],
+    "LAK": ["la kings","kings","angeles"],
+    "DAL": ["dallas","stars"],
+    "VGK": ["golden knights","vegas"],
+    "TOR": ["toronto","maple leafs","leafs"],
+    "NSH": ["nashville","predators"],
+    "OTT": ["ottawa","senators"],
+    "MTL": ["montreal","canadiens"],
+  };
+
   function matchesTeam(cellVal, targetAbbr) {
     const v = String(cellVal||"").trim();
+    if (!v) return false;
+    // Exact abbreviation match (most common — publisher writes abbr)
     if (v === targetAbbr) return true;
-    if (v.toLowerCase() === targetAbbr.toLowerCase()) return true;
-    // Check if the cell value contains the team name words
-    const teamObj = TEAMS.find(t => t.abbr === targetAbbr);
-    if (teamObj) {
-      const nameLower = teamObj.name.toLowerCase();
-      const vLower = v.toLowerCase();
-      // Match on key words (skip common words)
-      const keywords = nameLower.split(" ").filter(w => w.length > 3 && !["maple","golden","carolina","nashville","montreal","columbus","toronto","ottawa","dallas","vegas","angeles","jose"].includes(w));
-      // Try matching abbreviation against team full name
-      if (vLower.replace(/[^a-z]/g,"").includes(targetAbbr.toLowerCase())) return true;
-      // Try matching team name words against cell value
-      const teamWords = nameLower.replace("cwhl","").replace("cwnhl","").trim().split(" ").filter(w=>w.length>3);
-      if (teamWords.some(w => vLower.includes(w))) return true;
-    }
-    return false;
+    if (v.toUpperCase() === targetAbbr) return true;
+    // Full or partial name match (fallback for when publisher wrote full name)
+    const vLower = v.toLowerCase();
+    const keywords = ABBR_TO_KEYWORDS[targetAbbr] || [];
+    return keywords.some(kw => vLower.includes(kw));
   }
 
   const skRows = sk.rows.filter(r => matchesTeam(r[2], abbr));
