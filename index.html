@@ -1399,22 +1399,13 @@ async function loadGames() {
     gl.cols.forEach((c,i) => glIdx[c] = i);
     const glMidIdx = glIdx["Match ID"] ?? 0;
 
-    // Debug: log what skater log match IDs look like
-    const slMidCheck = sl.cols.findIndex(c => c.trim() === "Match ID");
-    const allSlMids = [...new Set(sl.rows.map(r => String(r[slMidCheck]||"").trim()))];
-    const lagoutSlMids = allSlMids.filter(m => m.includes("+"));
-    console.log("Lagout match IDs in skater log", lagoutSlMids);
-    console.log("Game log rows", gl.rows.length);
-    const allGlMids = gl.rows.map(r => String(r[0]||"").trim()).filter(Boolean);
-    console.log("Game log match IDs", allGlMids);
-
     // Strip "+..." suffix from compound match IDs so gviz-dropped lagout rows
     // can be re-added using just the first match ID.
     // Also: gviz drops rows where col A has "+" — so we recover them from
     // the Skater Log by finding match IDs not yet in the game log.
     gl.rows.forEach(r => {
       const mid = String(r[glMidIdx]||"").trim();
-      if (mid.includes("+")) r[glMidIdx] = mid.split("+")[0].trim();
+      if (mid.includes("+")) r[glMidIdx] = mid.split("-")[0].trim();
     });
 
     allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim() !== "" && String(r[0]||"").trim() !== "Match ID");
@@ -1435,7 +1426,7 @@ async function loadGames() {
     )];
 
     lagoutMids.forEach(fullMid => {
-      const firstMid = fullMid.split("+")[0].trim();
+      const firstMid = fullMid.split("-")[0].trim();
       if (knownMids.has(firstMid)) return; // already have it
 
       const skRows = sl.rows.filter(r => String(r[slMidIdx2]||"").trim() === fullMid);
@@ -1618,14 +1609,14 @@ function openBoxScore(gameIdx) {
   skaterLogData.cols.forEach((c,i) => skIdx[c] = i);
   const skRows = skaterLogData.rows.filter(r => {
     const mid = String(r[skIdx["Match ID"]]||"").trim();
-    return mid === matchId || mid.startsWith(matchId + "+") || mid.split("+")[0].trim() === matchId;
+    return mid === matchId || mid.startsWith(matchId + "-") || mid.split("-")[0].trim() === matchId;
   });
 
   const glGIdx = {};
   goalieLogData.cols.forEach((c,i) => glGIdx[c] = i);
   const glRows = goalieLogData.rows.filter(r => {
     const mid = String(r[glGIdx["Match ID"]]||"").trim();
-    return mid === matchId || mid.startsWith(matchId + "+") || mid.split("+")[0].trim() === matchId;
+    return mid === matchId || mid.startsWith(matchId + "-") || mid.split("-")[0].trim() === matchId;
   });
 
   // Split by team
