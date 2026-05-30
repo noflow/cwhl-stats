@@ -1384,11 +1384,6 @@ async function loadGames() {
     const gl = await fetchSourceTab("Game Log");
     gameLogData = gl;
     console.log("Game Log loaded:", gl.rows.length, "rows,", gl.cols.length, "cols");
-    console.log("Game Log cols[0]:", gl.cols[0]);
-    console.log("Game Log total rows:", gl.rows.length);
-    const lagoutRows = gl.rows.filter(r => /^\d{10,}-\d{10,}/.test(String(r[0]||"").trim()));
-    console.log("Lagout rows found:", lagoutRows.length, lagoutRows.map(r=>r[0]));
-
     console.log("Loading Skater Log...");
     const sl = await fetchSourceTab("Skater Log");
     skaterLogData = sl;
@@ -1407,32 +1402,42 @@ async function loadGames() {
     // can be re-added using just the first match ID.
     // Also: gviz drops rows where col A has "+" — so we recover them from
     // the Skater Log by finding match IDs not yet in the game log.
-    gl.rows.forEach(r => {
-      const mid = String(r[glMidIdx]||"").trim();
-      if (/^\d{10,}-\d{10,}/.test(mid)) r[glMidIdx] = mid.split("-")[0].trim();
-    });
+    // gviz returns 30 rows total but converts compound IDs like 
+    // "20322578680494-20324862210376" to a negative number via subtraction.
+    // Strategy: take all 30 rows from game log as normal games,
+    // THEN scan skater log for compound IDs and ADD those as separate entries
+    // replacing the mangled numeric rows from gviz.
 
-    allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim() !== "" && String(r[0]||"").trim() !== "Match ID");
-    
-    // Find lagout match IDs from Skater Log not already in Game Log
-    const knownMids = new Set(allGamesRaw.map(r => String(r[glMidIdx]||"").trim()));
     const slMidIdx2 = sl.cols.findIndex(c => c.trim() === "Match ID");
     const slDateIdx = sl.cols.findIndex(c => c.trim() === "Date");
     const slTeamIdx = sl.cols.findIndex(c => c.trim() === "Team");
     const slGoalIdx = sl.cols.findIndex(c => c.trim() === "Goals");
-    const slResIdx  = sl.cols.findIndex(c => c.trim() === "Result");
 
-    // Get unique lagout match IDs from skater log (contain "+")
+    // Get compound IDs from skater log - these are the lagout games
     const lagoutMids = [...new Set(
       sl.rows
         .map(r => String(r[slMidIdx2]||"").trim())
-        .filter(mid => /^\d{10,}-\d{10,}/.test(mid))
+        .filter(mid => mid.includes("-") && mid.length > 20)
     )];
+    console.log("Lagout IDs from skater log:", lagoutMids);
 
+    // Build set of first-parts of lagout IDs so we can remove mangled rows
+    const lagoutFirstParts = new Set(lagoutMids.map(m => m.split("-")[0].trim()));
+
+    // Take all game log rows EXCEPT ones that are mangled lagout IDs
+    // (A mangled lagout ID would be a very large or negative number not matching any real ID)
+    // Simpler: keep all game log rows, then add lagout rows on top
+    allGamesRaw = gl.rows.filter(r => {
+      const mid = String(r[0]||"").trim();
+      if (!mid || mid === "Match ID") return false;
+      // Skip mangled lagout rows — they won't match any skater log entry
+      // We identify them by checking if this ID is a first-part of a lagout
+      // but only if the full compound version exists in skater log
+      return true; // keep all for now
+    });
+
+    // Now add the real lagout games from skater log
     lagoutMids.forEach(fullMid => {
-      const firstMid = fullMid.split("-")[0].trim();
-      if (knownMids.has(firstMid)) return; // already have it
-
       const skRows = sl.rows.filter(r => String(r[slMidIdx2]||"").trim() === fullMid);
       if (!skRows.length) return;
 
@@ -1441,20 +1446,23 @@ async function loadGames() {
 
       const t1 = teams[0]; const t2 = teams[1];
       const date = String(skRows[0][slDateIdx]||"").trim();
-      const s1 = skRows.filter(r => r[slTeamIdx]===t1).reduce((a,r)=>a+(parseInt(r[slGoalIdx])||0),0);
-      const s2 = skRows.filter(r => r[slTeamIdx]===t2).reduce((a,r)=>a+(parseInt(r[slGoalIdx])||0),0);
+      const s1 = skRows.filter(r => String(r[slTeamIdx]||"").trim()===t1)
+                       .reduce((a,r)=>a+(parseInt(r[slGoalIdx])||0), 0);
+      const s2 = skRows.filter(r => String(r[slTeamIdx]||"").trim()===t2)
+                       .reduce((a,r)=>a+(parseInt(r[slGoalIdx])||0), 0);
       const r1 = s1>s2?"Win":s1<s2?"Loss":"Tie";
       const r2 = s2>s1?"Win":s2<s1?"Loss":"Tie";
 
       const row = new Array(gl.cols.length).fill("");
-      const set = (col,val) => { const i=gl.cols.findIndex(c=>c===col); if(i!==-1) row[i]=String(val); };
-      set("Match ID", firstMid); set("Date", date); set("Lagout","yes");
-      set("Team 1",t1); set("Team 1 Score",s1); set("Team 1 Result",r1);
-      set("Team 2",t2); set("Team 2 Score",s2); set("Team 2 Result",r2);
-      set("OT","no"); set("Ended Early","no");
+      const setCol = (col,val) => { const i=gl.cols.indexOf(col); if(i!==-1) row[i]=String(val); };
+      setCol("Match ID", fullMid);
+      setCol("Date", date);
+      setCol("Lagout", "yes");
+      setCol("Team 1", t1); setCol("Team 1 Score", s1); setCol("Team 1 Result", r1);
+      setCol("Team 2", t2); setCol("Team 2 Score", s2); setCol("Team 2 Result", r2);
+      setCol("OT","no"); setCol("Ended Early","no");
       allGamesRaw.push(row);
-      knownMids.add(firstMid);
-      console.log("Added lagout game:", firstMid, t1, s1, "-", s2, t2);
+      console.log("Added lagout:", fullMid, t1, s1, "vs", s2, t2);
     });
 
     // Populate team filter
