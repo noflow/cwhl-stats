@@ -439,11 +439,22 @@ async function fetchTab(tabName) {
   const res  = await fetch(url);
   const text = await res.text();
   const json = JSON.parse(text.substring(47, text.length - 2));
-  const cols = json.table.cols.map(c => c.label);
-  const rows = json.table.rows.map(r =>
-    r.c.map(cell => cell ? (cell.v !== null && cell.v !== undefined ? cell.v : "") : "")
-  );
-  return { cols, rows };
+  // gviz returns col labels from row 1 only if row 1 has data
+  // We want ALL rows including header rows as raw data
+  // Use the raw rows array - each row has .c array of cells
+  const numCols = json.table.cols.length;
+  const rows = json.table.rows.map(r => {
+    const cells = [];
+    for (let i = 0; i < numCols; i++) {
+      const cell = r.c ? r.c[i] : null;
+      cells.push(cell && cell.v !== null && cell.v !== undefined ? String(cell.v) : "");
+    }
+    return cells;
+  });
+  // The col labels from gviz are unreliable for sheets with merged cells
+  // so we return cols as empty and use row data directly
+  const cols = json.table.cols.map(c => c.label || "");
+  return { cols, rows, numCols };
 }
 
 // ── PAGE SWITCHING ────────────────────────────────────────────────────────────
@@ -728,74 +739,84 @@ async function showTeam(abbr, btn) {
   }
 }
 
-function renderTeam(abbr, { cols, rows }) {
+function renderTeam(abbr, { cols, rows, numCols }) {
   const team = TEAMS.find(t => t.abbr === abbr);
   const teamName = team ? team.name.toUpperCase() : abbr;
 
-  // The team tab structure from the publisher is:
-  // Row 0: team banner (MONTREAL CANADIENS)
-  // Row 1: -- SKATERS -- label
-  // Row 2: skater column headers (Username, Platform, Position, GP, G, A, PTS...)
-  // Rows 3+: skater data rows
-  // Row N: TOTAL row
-  // Row N+1: blank spacer
-  // Row N+2: -- GOALIES -- label
-  // Row N+3: goalie column headers (Username, Platform, GP, W, L...)
-  // Rows N+4+: goalie data rows
+  // Debug: log all rows to console so we can see structure
+  console.log("=== " + abbr + " TAB ROWS ===");
+  rows.forEach((r, i) => console.log(i, JSON.stringify(r.slice(0,5))));
 
-  let skHdrIdx = -1, glHdrIdx = -1, totalRowData = null;
+  // Strategy: scan every row and classify it
+  // - Banner row: first cell contains team name (all caps, no stats)
+  // - Section label: first cell contains "SKATER" or "GOALIE"
+  // - Header row: first cell === "Username"
+  // - Data row: first cell is a player name (non-empty, not a label)
+  // - Total row: first cell === "TOTAL"
+  // - Blank row: all cells empty
+
+  let skHdrIdx = -1, glHdrIdx = -1;
+  let totalRowData = null;
   const skRows = [], glRows = [];
+  let phase = "pre"; // pre, skaters, goalies
 
-  // Find header rows by looking for "Username" in first cell
-  rows.forEach((r, i) => {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
     const first = String(r[0] || "").trim();
+    const isBlank = r.every(c => !String(c||"").trim());
+
+    if (isBlank) continue;
+
+    // Section labels
+    if (first.includes("SKATER") || first.includes("skater") || first.includes("─")) continue;
+    if (first.includes("GOALIE") || first.includes("goalie")) { phase = "goalies"; continue; }
+
+    // Header rows (Username)
     if (first === "Username") {
-      if (skHdrIdx === -1) skHdrIdx = i;
-      else if (glHdrIdx === -1) glHdrIdx = i;
+      if (skHdrIdx === -1) { skHdrIdx = i; phase = "skaters"; }
+      else if (glHdrIdx === -1) { glHdrIdx = i; phase = "goalies"; }
+      continue;
     }
-    if (first === "TOTAL") totalRowData = r;
-  });
+
+    // Total row
+    if (first === "TOTAL") { totalRowData = r; continue; }
+
+    // Team banner (first row, usually team name in caps or mixed case)
+    // Skip rows before skater header
+    if (skHdrIdx === -1) continue;
+
+    // Data rows
+    if (phase === "skaters" && skHdrIdx !== -1) skRows.push(r);
+    else if (phase === "goalies" && glHdrIdx !== -1) glRows.push(r);
+    else if (phase === "goalies" && glHdrIdx === -1) glRows.push(r);
+  }
+
+  console.log("skHdrIdx:", skHdrIdx, "glHdrIdx:", glHdrIdx);
+  console.log("skRows:", skRows.length, "glRows:", glRows.length);
+  console.log("skHeaders:", rows[skHdrIdx]);
 
   if (skHdrIdx === -1) {
     document.getElementById("team-content").innerHTML =
-      `<div class="loading">No data for ${abbr} yet.</div>`;
+      `<div class="loading">No data for ${abbr} yet. Check that stats_publisher.py has run.</div>`;
     return;
   }
 
-  // Collect skater rows: between skHdrIdx+1 and glHdrIdx (or end)
   const skHeaders = rows[skHdrIdx];
   const glHeaders = glHdrIdx !== -1 ? rows[glHdrIdx] : [];
-  const skEnd = glHdrIdx !== -1 ? glHdrIdx : rows.length;
-
-  for (let i = skHdrIdx + 1; i < skEnd; i++) {
-    const first = String(rows[i][0] || "").trim();
-    // Skip blank rows, TOTAL row, section labels
-    if (!first || first === "TOTAL" || first.startsWith("--") || first.startsWith("\u2500")) continue;
-    skRows.push(rows[i]);
-  }
-
-  // Collect goalie rows: after glHdrIdx+1
-  if (glHdrIdx !== -1) {
-    for (let i = glHdrIdx + 1; i < rows.length; i++) {
-      const first = String(rows[i][0] || "").trim();
-      if (!first || first.startsWith("--") || first.startsWith("\u2500")) continue;
-      glRows.push(rows[i]);
-    }
-  }
 
   function makeTable(headers, dataRows, highlightCol, totalRow) {
-    // Filter out empty trailing columns
-    let lastNonEmpty = 0;
-    headers.forEach((h, i) => { if (String(h||"").trim()) lastNonEmpty = i; });
-    const useCols = lastNonEmpty + 1;
+    // Find last non-empty header to trim trailing empty cols
+    let lastCol = 0;
+    headers.forEach((h, i) => { if (String(h||"").trim()) lastCol = i; });
+    const useCols = Math.min(lastCol + 1, headers.length);
 
     const hdr = headers.slice(0, useCols).map((h, i) =>
-      `<th onclick="sortTeamTable(this, ${i})" style="cursor:pointer;white-space:nowrap">${String(h||"").trim()}</th>`
+      `<th onclick="sortTeamTable(this,${i})" style="cursor:pointer;white-space:nowrap">${String(h||"").trim()}</th>`
     ).join("");
 
     const body = dataRows.map(r =>
       `<tr>${r.slice(0, useCols).map((v, i) => {
-        const val = (v !== null && v !== undefined && v !== "") ? v : "-";
+        const val = String(v||"").trim() || "-";
         if (i === 0) return `<td class="player-name">${val}</td>`;
         if (i === highlightCol) return `<td class="pts-cell">${val}</td>`;
         return `<td>${val}</td>`;
@@ -804,28 +825,27 @@ function renderTeam(abbr, { cols, rows }) {
 
     const tot = totalRow
       ? `<tr class="totals-row">${totalRow.slice(0, useCols).map(v =>
-          `<td>${(v !== null && v !== undefined && v !== "") ? v : ""}</td>`
-        ).join("")}</tr>`
+          `<td>${String(v||"").trim()}</td>`).join("")}</tr>`
       : "";
 
+    if (!body) return "<p style='padding:16px;color:#888'>No data rows found</p>";
     return `<table><thead><tr>${hdr}</tr></thead><tbody>${body}${tot}</tbody></table>`;
   }
 
   const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
+  const svIdx  = glHeaders.findIndex(h => String(h).trim() === "Save %");
 
   document.getElementById("team-content").innerHTML = `
     <div style="background:#fff;border-radius:8px;box-shadow:0 2px 16px rgba(0,0,0,0.08);overflow:hidden;margin-bottom:24px;">
       <div class="team-banner">${teamName}</div>
       <div class="subsection-label">Skaters</div>
       <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
-        ${skRows.length ? makeTable(skHeaders, skRows, ptsIdx, totalRowData)
-          : "<p style='padding:16px;color:#888'>No skater data</p>"}
+        ${makeTable(skHeaders, skRows, ptsIdx, totalRowData)}
       </div>
       ${glHeaders.length ? `
         <div class="subsection-label" style="margin-top:2px;">Goalies</div>
         <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
-          ${glRows.length ? makeTable(glHeaders, glRows, 10, null)
-            : "<p style='padding:16px;color:#888'>No goalie data</p>"}
+          ${makeTable(glHeaders, glRows, svIdx, null)}
         </div>` : ""}
     </div>`;
 }
