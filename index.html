@@ -446,6 +446,184 @@
     text-underline-offset: 3px;
   }
   .player-name.clickable:hover { color: var(--teal2); }
+
+  /* ── RECENT GAMES ── */
+  .games-grid { display: flex; flex-direction: column; gap: 10px; }
+  .game-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .game-card:hover { border-color: var(--teal); box-shadow: 0 4px 20px rgba(26,82,118,0.15); }
+  .game-date {
+    font-size: 11px;
+    color: var(--grey3);
+    min-width: 120px;
+    font-weight: 500;
+  }
+  .game-teams {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  .game-team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 140px;
+  }
+  .game-team-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--black);
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
+  .game-team-name.winner { color: var(--teal); }
+  .game-score-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .game-score {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--teal);
+    line-height: 1;
+    min-width: 40px;
+    text-align: center;
+  }
+  .game-score.loser { color: var(--grey2); }
+  .game-sep {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    color: var(--grey3);
+    font-weight: 400;
+  }
+  .game-badge {
+    display: flex;
+    gap: 6px;
+    font-size: 10px;
+  }
+  .badge {
+    background: var(--teal3);
+    color: var(--teal);
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.5px;
+    font-size: 11px;
+  }
+  .badge.ot   { background: #fef9f0; color: var(--gold); }
+  .badge.lgot { background: #fdf2f2; color: var(--accent); }
+  .game-arrow {
+    color: var(--grey3);
+    font-size: 18px;
+    margin-left: 12px;
+  }
+
+  /* ── BOX SCORE MODAL ── */
+  .box-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 2000;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .box-modal-overlay.open { display: flex; }
+  .box-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 1100px;
+    margin: auto;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.3);
+    animation: slideUp 0.2s ease;
+    overflow: hidden;
+  }
+  .box-header {
+    background: var(--teal);
+    color: #fff;
+    padding: 18px 24px;
+    position: relative;
+  }
+  .box-scoreline {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 30px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+  .box-meta {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 4px;
+  }
+  .box-close {
+    position: absolute;
+    top: 14px; right: 18px;
+    background: rgba(255,255,255,0.15);
+    border: none; color: #fff;
+    font-size: 18px; width: 30px; height: 30px;
+    border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .box-close:hover { background: rgba(255,255,255,0.3); }
+  .box-body { padding: 0 0 20px; }
+  .box-team-section {
+    padding: 0 20px 16px;
+  }
+  .box-team-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--teal);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 14px 0 8px;
+    border-bottom: 2px solid var(--teal3);
+    margin-bottom: 8px;
+  }
+  .box-table-wrap { overflow-x: auto; }
+  .box-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 600px;
+  }
+  .box-table thead tr { background: var(--teal2); color: #fff; }
+  .box-table thead th {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    padding: 7px 8px;
+    text-align: center;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .box-table thead th:first-child { text-align: left; padding-left: 12px; }
+  .box-table tbody tr { border-bottom: 1px solid #eee; }
+  .box-table tbody tr:nth-child(even) { background: var(--grey1); }
+  .box-table tbody td { padding: 7px 8px; text-align: center; color: var(--black); white-space: nowrap; }
+  .box-table tbody td:first-child { text-align: left; padding-left: 12px; font-weight: 600; color: var(--teal); }
+  .box-divider { height: 1px; background: var(--grey2); margin: 0 20px; }
 </style>
 </head>
 <body>
@@ -457,6 +635,7 @@
     <button onclick="showPage('players', this)">Player Stats</button>
     <button onclick="showPage('goalies', this)">Goalie Stats</button>
     <button onclick="showPage('teams', this)">Teams</button>
+    <button onclick="showPage('games', this)">Recent Games</button>
   </nav>
 </header>
 
@@ -527,7 +706,8 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Your publish sheet ID — the one stats_publisher.py writes to
-const SHEET_ID = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I";
+const SHEET_ID        = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I"; // publish sheet
+const SOURCE_SHEET_ID = "1KfHr5l2ms5d6dfgaDDACZVNymolxJw5ZSNfGkSlwPxU"; // scraper sheet (Game/Skater/Goalie Log)
 
 const DIVISIONS = {
   "East": ["TOR","OTT","MTL","CAR","CBJ"],
@@ -593,6 +773,27 @@ async function fetchTab(tabName) {
     });
   });
 
+  return { cols, rows, numCols };
+}
+
+// Fetch from the SOURCE (scraper) sheet instead of publish sheet
+async function fetchSourceTab(tabName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
+  const text = await res.text();
+  const json = JSON.parse(text.substring(47, text.length - 2));
+  const numCols = json.table.cols.length;
+  const cols = json.table.cols.map(c => String(c.label || ""));
+  const rows = (json.table.rows || []).map(r => {
+    const cells = [];
+    for (let i = 0; i < numCols; i++) {
+      const cell = r.c ? r.c[i] : null;
+      const val = cell && cell.v !== null && cell.v !== undefined ? String(cell.v) : "";
+      cells.push(val);
+    }
+    return cells;
+  });
   return { cols, rows, numCols };
 }
 
@@ -1068,6 +1269,284 @@ function sortTeamTable(th, colIdx) {
 }
 
 
+
+// ── RECENT GAMES ──────────────────────────────────────────────────────────────
+let gameLogData    = { cols: [], rows: [] };
+let skaterLogData  = { cols: [], rows: [] };
+let goalieLogData  = { cols: [], rows: [] };
+let allGamesRaw    = [];
+
+// Full team name lookup from abbreviation (for display)
+const ABBR_TO_FULL = {
+  CAR:"Carolina Hurricanes", CBJ:"Columbus Blue Jackets",
+  SJS:"San Jose Sharks",     LAK:"LA Kings",
+  DAL:"Dallas Stars",        VGK:"Vegas Golden Knights",
+  TOR:"Toronto Maple Leafs", NSH:"Nashville Predators",
+  OTT:"Ottawa Senators",     MTL:"Montreal Canadiens",
+};
+
+// Map team name variants to abbreviation (for game log lookup)
+function nameToAbbr(name) {
+  const n = String(name||"").toLowerCase();
+  for (const [abbr, kws] of Object.entries(ABBR_TO_KEYWORDS)) {
+    if (kws.some(kw => n.includes(kw))) return abbr;
+  }
+  return name.slice(0,3).toUpperCase();
+}
+
+function abbrToDisplay(abbr) {
+  return ABBR_TO_FULL[abbr] || abbr;
+}
+
+async function loadGames() {
+  try {
+    // Load all three logs from source sheet
+    console.log("Loading Game Log...");
+    const gl = await fetchSourceTab("Game Log");
+    gameLogData = gl;
+
+    console.log("Loading Skater Log...");
+    const sl = await fetchSourceTab("Skater Log");
+    skaterLogData = sl;
+
+    console.log("Loading Goalie Log...");
+    const gol = await fetchSourceTab("Goalie Log");
+    goalieLogData = gol;
+
+    // Build game list sorted newest first
+    const glIdx = {};
+    gl.cols.forEach((c,i) => glIdx[c] = i);
+
+    allGamesRaw = gl.rows.filter(r => String(r[0]||"").trim()); // skip blank rows
+
+    // Populate team filter
+    const teamNames = new Set();
+    allGamesRaw.forEach(r => {
+      teamNames.add(String(r[glIdx["Team 1"]]||"").trim());
+      teamNames.add(String(r[glIdx["Team 2"]]||"").trim());
+    });
+    const sel = document.getElementById("game-team-filter");
+    [...teamNames].sort().forEach(t => {
+      if (!t) return;
+      const o = document.createElement("option");
+      o.value = t; o.textContent = t; sel.appendChild(o);
+    });
+
+    renderGames();
+  } catch(e) {
+    document.getElementById("games-list").innerHTML =
+      `<div class="loading">Error loading games: ${e.message}<br><small>Make sure the source sheet is shared publicly.</small></div>`;
+    console.error(e);
+  }
+}
+
+function filterGames() { renderGames(); }
+
+function renderGames() {
+  const teamFil = document.getElementById("game-team-filter").value;
+  const gl = gameLogData;
+  const glIdx = {};
+  gl.cols.forEach((c,i) => glIdx[c] = i);
+
+  let games = [...allGamesRaw];
+  if (teamFil) {
+    games = games.filter(r =>
+      String(r[glIdx["Team 1"]]||"") === teamFil ||
+      String(r[glIdx["Team 2"]]||"") === teamFil
+    );
+  }
+
+  // Sort newest first by date
+  games.sort((a,b) => String(b[glIdx["Date"]]||"").localeCompare(String(a[glIdx["Date"]]||"")));
+
+  document.getElementById("game-count").textContent = `${games.length} games`;
+
+  if (!games.length) {
+    document.getElementById("games-list").innerHTML =
+      `<div class="loading">No games found.</div>`;
+    return;
+  }
+
+  const html = `<div class="games-grid">${games.map(r => {
+    const mid   = String(r[glIdx["Match ID"]]||"").trim();
+    const date  = String(r[glIdx["Date"]]||"").trim();
+    const t1    = String(r[glIdx["Team 1"]]||"").trim();
+    const t2    = String(r[glIdx["Team 2"]]||"").trim();
+    const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
+    const s2    = String(r[glIdx["Team 2 Score"]]||"0").trim();
+    const r1    = String(r[glIdx["Team 1 Result"]]||"").trim();
+    const r2    = String(r[glIdx["Team 2 Result"]]||"").trim();
+    const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
+    const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
+    const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
+
+    const t1wins = r1 === "Win";
+    const t2wins = r2 === "Win";
+
+    let badges = "";
+    if (ot)     badges += `<span class="badge ot">OT</span>`;
+    if (lagout) badges += `<span class="badge lgot">LAGOUT</span>`;
+    else if (early) badges += `<span class="badge lgot">MERCY</span>`;
+
+    return `<div class="game-card" onclick="openBoxScore(${JSON.stringify(mid)}, ${JSON.stringify(r)}, ${JSON.stringify(gl.cols)})">
+      <div class="game-date">${date}</div>
+      <div class="game-teams">
+        <div class="game-team">
+          <div class="game-team-name ${t1wins ? "winner":""}">${t1}</div>
+          <div class="game-badge">${t1wins ? '<span class="badge">W</span>':''}</div>
+        </div>
+        <div class="game-score-wrap">
+          <div class="game-score ${t1wins ? "":"loser"}">${s1}</div>
+          <div class="game-sep">–</div>
+          <div class="game-score ${t2wins ? "":"loser"}">${s2}</div>
+        </div>
+        <div class="game-team">
+          <div class="game-team-name ${t2wins ? "winner":""}">${t2}</div>
+          <div class="game-badge">${t2wins ? '<span class="badge">W</span>':''}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${badges}
+        <span class="game-arrow">&#8250;</span>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+
+  document.getElementById("games-list").innerHTML = html;
+}
+
+// ── BOX SCORE MODAL ───────────────────────────────────────────────────────────
+function openBoxScore(matchId, gameRow, gameCols) {
+  const glIdx = {};
+  gameCols.forEach((c,i) => glIdx[c] = i);
+
+  const t1 = String(gameRow[glIdx["Team 1"]]||"").trim();
+  const t2 = String(gameRow[glIdx["Team 2"]]||"").trim();
+  const s1 = String(gameRow[glIdx["Team 1 Score"]]||"0").trim();
+  const s2 = String(gameRow[glIdx["Team 2 Score"]]||"0").trim();
+  const date = String(gameRow[glIdx["Date"]]||"").trim();
+  const ot   = String(gameRow[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
+
+  document.getElementById("box-scoreline").textContent =
+    `${t1}  ${s1} – ${s2}  ${t2}`;
+  document.getElementById("box-meta").textContent =
+    `${date}${ot ? "  •  OT" : ""}  •  Match ${matchId}`;
+
+  // Match IDs can be compound (lagout merges): "123+456"
+  const matchIds = matchId.split("+").map(s => s.trim());
+
+  // Filter skater rows for this match
+  const skIdx = {};
+  skaterLogData.cols.forEach((c,i) => skIdx[c] = i);
+  const skRows = skaterLogData.rows.filter(r =>
+    matchIds.includes(String(r[skIdx["Match ID"]]||"").trim())
+  );
+
+  // Filter goalie rows for this match
+  const glGIdx = {};
+  goalieLogData.cols.forEach((c,i) => glGIdx[c] = i);
+  const glRows = goalieLogData.rows.filter(r =>
+    matchIds.includes(String(r[glGIdx["Match ID"]]||"").trim())
+  );
+
+  // Split by team
+  const teams = [t1, t2];
+  let bodyHtml = "";
+
+  teams.forEach((team, ti) => {
+    const teamSkaters = skRows.filter(r =>
+      String(r[skIdx["Team"]]||"").trim().toLowerCase() === team.toLowerCase()
+    );
+    const teamGoalies = glRows.filter(r =>
+      String(r[glGIdx["Team"]]||"").trim().toLowerCase() === team.toLowerCase()
+    );
+
+    const score = ti === 0 ? s1 : s2;
+    const result = ti === 0
+      ? String(gameRow[glIdx["Team 1 Result"]]||"").trim()
+      : String(gameRow[glIdx["Team 2 Result"]]||"").trim();
+
+    bodyHtml += `
+      <div class="box-team-section">
+        <div class="box-team-label">${team} &nbsp; <span style="font-size:22px">${score}</span>
+          <span style="font-size:13px;font-weight:400;color:${result==="Win"?"#27ae60":"var(--accent)"};margin-left:10px">${result}</span>
+        </div>`;
+
+    // Skater table
+    if (teamSkaters.length) {
+      const skHdr = ["Player","Pos","G","A","PTS","Shots","Shot%","Hits","TKA","BS","INT","GVA","FOW","FOL","FO%","+/-","PIMs","TOI"];
+      bodyHtml += `<div class="box-table-wrap"><table class="box-table">
+        <thead><tr>${skHdr.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${teamSkaters.map(r => {
+          const g    = String(r[skIdx["Goals"]]||"0");
+          const a    = String(r[skIdx["Assists"]]||"0");
+          const pts  = (parseInt(g)||0) + (parseInt(a)||0);
+          const sh   = String(r[skIdx["Shots"]]||"0");
+          const shg  = parseInt(r[skIdx["Goals"]])||0;
+          const sha  = parseInt(r[skIdx["Shot Attempts"]])||1;
+          const shotpct = sha > 0 ? ((shg/sha)*100).toFixed(1)+"%" : "-";
+          const pos  = String(r[skIdx["Position"]]||"").replace("Men","").replace("left","L").replace("right","R").replace("Wing","W").replace("center","C").replace("defense","D");
+          const name = String(r[skIdx["Username"]]||"");
+          const pm   = parseInt(r[skIdx["Plus Minus"]]||0);
+          const pmStr = pm > 0 ? `+${pm}` : String(pm);
+          return `<tr>
+            <td>${name}</td>
+            <td>${pos}</td>
+            <td>${g}</td><td>${a}</td><td>${pts}</td>
+            <td>${sh}</td><td>${shotpct}</td>
+            <td>${r[skIdx["Hits"]]||0}</td>
+            <td>${r[skIdx["Takeaways"]]||0}</td>
+            <td>${r[skIdx["Blocked Shots"]]||0}</td>
+            <td>${r[skIdx["Interceptions"]]||0}</td>
+            <td>${r[skIdx["Giveaways"]]||0}</td>
+            <td>${r[skIdx["Faceoff Wins"]]||0}</td>
+            <td>${r[skIdx["Faceoff Losses"]]||0}</td>
+            <td>${r[skIdx["Faceoff %"]]||"-"}</td>
+            <td>${pmStr}</td>
+            <td>${r[skIdx["PIMs"]]||0}</td>
+            <td>${r[skIdx["TOI"]]||0}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>`;
+    }
+
+    // Goalie table
+    if (teamGoalies.length) {
+      const glHdr = ["Goalie","SA","Saves","GA","SV%","BrkSv","PenSv","DivSv"];
+      bodyHtml += `<div class="box-table-wrap" style="margin-top:8px"><table class="box-table">
+        <thead><tr>${glHdr.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${teamGoalies.map(r => {
+          return `<tr>
+            <td>${r[glGIdx["Username"]]||""}</td>
+            <td>${r[glGIdx["Shots Against"]]||0}</td>
+            <td>${r[glGIdx["Saves"]]||0}</td>
+            <td>${r[glGIdx["Goals Against"]]||0}</td>
+            <td>${r[glGIdx["Save %"]]||"-"}</td>
+            <td>${r[glGIdx["Breakaways Saves"]]||0}</td>
+            <td>${r[glGIdx["Penalty Shot Saves"]]||0}</td>
+            <td>${r[glGIdx["Diving Saves"]]||0}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>`;
+    }
+
+    bodyHtml += `</div>`;
+    if (ti === 0) bodyHtml += `<div class="box-divider"></div>`;
+  });
+
+  document.getElementById("box-body").innerHTML = bodyHtml;
+  document.getElementById("box-modal").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeBoxScoreModal() {
+  document.getElementById("box-modal").classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function closeBoxModal(e) {
+  if (e.target === document.getElementById("box-modal")) closeBoxScoreModal();
+}
 // ── PLAYER CARD MODAL ─────────────────────────────────────────────────────────
 
 // Skater stat sections for the card layout
@@ -1158,6 +1637,13 @@ loadStandings();
 loadPlayers();
 loadGoalies();
 loadTeams();
+
+// Lazy-load games when tab is first clicked
+const _origShowPage = showPage;
+window.showPage = function(id, btn) {
+  _origShowPage(id, btn);
+  if (id === 'games' && !gameLogData.cols.length) loadGames();
+};
 </script>
 
 <!-- PLAYER CARD MODAL -->
@@ -1169,6 +1655,18 @@ loadTeams();
       <button class="modal-close" onclick="closePlayerModal()">&#10005;</button>
     </div>
     <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- BOX SCORE MODAL -->
+<div class="box-modal-overlay" id="box-modal" onclick="closeBoxModal(event)">
+  <div class="box-modal">
+    <div class="box-header">
+      <div class="box-scoreline" id="box-scoreline"></div>
+      <div class="box-meta" id="box-meta"></div>
+      <button class="box-close" onclick="closeBoxScoreModal()">&#10005;</button>
+    </div>
+    <div class="box-body" id="box-body"></div>
   </div>
 </div>
 </body>
