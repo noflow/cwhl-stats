@@ -200,7 +200,17 @@
     color: var(--black);
   }
   tbody td:first-child { text-align: left; padding-left: 14px; font-weight: 600; min-width: 150px; }
-  .rank-cell { color: var(--grey3); font-size: 12px; width: 32px; min-width: 32px; text-align: center; }
+  .rank-head,
+  .rank-cell {
+    color: var(--grey3);
+    font-size: 12px;
+    width: 24px !important;
+    min-width: 24px !important;
+    max-width: 24px !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    text-align: center !important;
+  }
   .player-name { font-weight: 600; color: var(--teal); min-width: 150px; display: inline-block; }
   .team-badge { min-width: 40px;
     display: inline-block;
@@ -260,6 +270,21 @@
   .stand-table tbody tr:nth-child(even) { background: var(--grey1); }
   .stand-table tbody td { padding: 8px 10px; text-align: center; color: var(--black); }
   .stand-table tbody td:first-child { text-align: left; padding-left: 14px; font-weight: 600; }
+  .stand-team-link {
+    border: none;
+    background: transparent;
+    color: var(--teal);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+  }
+  .stand-team-link:hover {
+    color: var(--teal2);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
   .pts-bold { font-weight: 700; color: var(--teal); }
 
   /* ── TEAM TABS ── */
@@ -395,6 +420,32 @@
   }
   .modal-close:hover { background: rgba(255,255,255,0.3); }
   .modal-body { padding: 20px 24px 24px; }
+  .player-card-tabs {
+    display: flex;
+    gap: 8px;
+    margin: -4px 0 18px;
+    border-bottom: 1px solid var(--grey2);
+  }
+  .player-card-tab {
+    border: none;
+    background: transparent;
+    color: var(--grey3);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 8px 4px 10px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+  }
+  .player-card-tab.active {
+    color: var(--teal);
+    border-bottom-color: var(--teal);
+  }
+  .player-card-panel { display: none; }
+  .player-card-panel.active { display: block; }
+  .player-games-list .date-group { margin-bottom: 18px; }
   .stat-section-title {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 13px;
@@ -847,7 +898,8 @@ async function fetchTab(tabName) {
     }
     return cells;
   });
-  // Post-process: gviz returns percentage strings (e.g. "39.5%") as decimals (0.395)
+  // Post-process: gviz returns sheet percentages as decimals, including
+  // over-100% values like 117.6% as 1.176.
   // Detect known pct columns by name and reformat them
   const PCT_COLS = new Set([
     "Shot %", "Shots On Net %", "Pass %", "Faceoff %",
@@ -860,10 +912,9 @@ async function fetchTab(tabName) {
       const v = row[ci];
       if (v === "" || v === "-") return;
       const n = parseFloat(v);
-      if (!isNaN(n) && n >= 0 && n <= 1) {
+      if (!isNaN(n) && n >= 0 && n <= 5) {
         row[ci] = (n * 100).toFixed(1) + "%";
       } else if (!isNaN(n) && n > 1) {
-        // Already a percentage number, just add %
         row[ci] = n.toFixed(1) + "%";
       }
     });
@@ -942,6 +993,21 @@ function showPage(id, btn) {
   history.replaceState(null, "", "#" + id);
 }
 
+async function openTeamRoster(abbr) {
+  const teamsNavBtn = document.querySelector(`nav button[onclick*="'teams'"]`);
+  showPage("teams", teamsNavBtn);
+
+  if (!document.querySelector("#team-nav .team-btn")) {
+    await loadTeams();
+  }
+
+  const teamBtn = document.querySelector(`#team-nav .team-btn[onclick*="'${abbr}'"]`);
+  if (teamBtn) {
+    await showTeam(abbr, teamBtn);
+    teamBtn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }
+}
+
 // ── SORT STATE ────────────────────────────────────────────────────────────────
 const sortState = { players: {col: -1, dir: -1}, goalies: {col: -1, dir: -1} };
 
@@ -1005,7 +1071,7 @@ async function loadStandings() {
             <tbody>
               ${divTeams.map((t,i) => `
                 <tr>
-                  <td>${t.name}</td>
+                  <td><button class="stand-team-link" onclick="openTeamRoster('${t.abbr}')">${t.name}</button></td>
                   <td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${t.otl}</td>
                   <td class="pts-bold">${t.pts}</td><td>${t.gf}</td><td>${t.ga}</td>
                 </tr>`).join("")}
@@ -1124,7 +1190,7 @@ function renderPlayers() {
 
   document.getElementById("player-table-wrap").innerHTML = `
     <table>
-      <thead><tr><th>#</th>${headers.join("")}</tr></thead>
+      <thead><tr><th class="rank-head">#</th>${headers.join("")}</tr></thead>
       <tbody>${bodyRows.join("") || '<tr><td colspan="99" style="text-align:center;padding:30px;color:#888">No players match your search</td></tr>'}</tbody>
     </table>`;
 }
@@ -1178,7 +1244,7 @@ function renderGoalies() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = r.slice(1).map((v, i) => {
       const colIdx = i + 1;
-      if (colIdx === 1) return makeClickable(v || "-", r, playerData.cols, false);
+      if (colIdx === 1) return makeClickable(v || "-", r, goalieData.cols, true);
       if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
       if (colIdx === 10) return `<td class="pts-cell">${v || "-"}</td>`;
       return `<td>${v !== null && v !== "" ? v : "-"}</td>`;
@@ -1188,7 +1254,7 @@ function renderGoalies() {
 
   document.getElementById("goalie-table-wrap").innerHTML = `
     <table>
-      <thead><tr><th>#</th>${headers.join("")}</tr></thead>
+      <thead><tr><th class="rank-head">#</th>${headers.join("")}</tr></thead>
       <tbody>${bodyRows.join("") || '<tr><td colspan="99" style="text-align:center;padding:30px;color:#888">No goalies match your search</td></tr>'}</tbody>
     </table>`;
 }
@@ -1329,6 +1395,7 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
     let lastCol = 0;
     headers.forEach((h,i) => { if (String(h||"").trim()) lastCol = i; });
     const useCols = lastCol + 1;
+    const isGoalieTable = headers.some(h => String(h||"").trim() === "Save %");
 
     // Build index map: original col index -> display col index (skipping SKIP_COLS)
     const displayCols = [];
@@ -1352,7 +1419,7 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
           const teamVal = String(r[2]||"").trim();
           const rowWithTeam = [...r];
           const hdrsWithTeam = [...headers];
-          return makeClickable(v, rowWithTeam, hdrsWithTeam, false);
+          return makeClickable(v, rowWithTeam, hdrsWithTeam, isGoalieTable);
         }
         if (origIdx === highlightCol) return `<td class="pts-cell">${v}</td>`; // PTS or SV%
         return `<td>${v}</td>`;
@@ -1422,6 +1489,19 @@ const ABBR_TO_FULL = {
   DAL:"Dallas Stars",        VGK:"Vegas Golden Knights",
   TOR:"Toronto Maple Leafs", NSH:"Nashville Predators",
   OTT:"Ottawa Senators",     MTL:"Montreal Canadiens",
+};
+
+const ABBR_TO_KEYWORDS = {
+  "CAR": ["carolina","hurricanes"],
+  "CBJ": ["columbus"],
+  "SJS": ["san jose","sharks"],
+  "LAK": ["la kings","kings","angeles"],
+  "DAL": ["dallas","stars"],
+  "VGK": ["golden knights","vegas"],
+  "TOR": ["toronto","maple leafs","leafs"],
+  "NSH": ["nashville","predators"],
+  "OTT": ["ottawa","senators"],
+  "MTL": ["montreal","canadiens"],
 };
 
 // Map team name variants to abbreviation (for game log lookup)
@@ -1652,15 +1732,104 @@ function renderGames() {
   document.getElementById("games-list").innerHTML = html;
 }
 
+function getIndexMap(cols) {
+  const idx = {};
+  cols.forEach((c,i) => idx[String(c||"").trim()] = i);
+  return idx;
+}
+
+function normalizeMatchId(mid) {
+  return String(mid||"").trim().split("-")[0].split("+")[0].trim();
+}
+
+function formatGameDateHeader(d) {
+  try {
+    const dt = new Date(d + "T12:00:00");
+    return dt.toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+  } catch(e) { return d; }
+}
+
+function gameCardHtml(r, gameIdx, glIdx, source) {
+  const fullDate = String(r[glIdx["Date"]]||"").trim();
+  const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
+  const t1    = String(r[glIdx["Team 1"]]||"").trim();
+  const t2    = String(r[glIdx["Team 2"]]||"").trim();
+  const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
+  const s2    = String(r[glIdx["Team 2 Score"]]||"0").trim();
+  const r1    = String(r[glIdx["Team 1 Result"]]||"").trim();
+  const r2    = String(r[glIdx["Team 2 Result"]]||"").trim();
+  const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
+  const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
+  const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
+  const t1wins = r1 === "Win";
+  const t2wins = r2 === "Win";
+
+  let badges = "";
+  if (ot)          badges += `<span class="badge ot">OT</span>`;
+  if (lagout)      badges += `<span class="badge lgot">LAGOUT</span>`;
+  else if (early)  badges += `<span class="badge lgot">MERCY</span>`;
+
+  const click = source ? `openBoxScore(${gameIdx}, '${source}')` : `openBoxScore(${gameIdx})`;
+
+  return `<div class="game-card" onclick="${click}">
+    ${timeOnly ? `<div class="game-date">${timeOnly}</div>` : ""}
+    <div class="game-teams">
+      <div class="game-team">
+        <div class="game-team-name ${t1wins?"winner":""}">${t1}</div>
+        <div class="game-badge">${t1wins?'<span class="badge">W</span>':''}</div>
+      </div>
+      <div class="game-score-wrap">
+        <div class="game-score ${t1wins?"":"loser"}">${s1}</div>
+        <div class="game-sep">â€“</div>
+        <div class="game-score ${t2wins?"":"loser"}">${s2}</div>
+      </div>
+      <div class="game-team">
+        <div class="game-team-name ${t2wins?"winner":""}">${t2}</div>
+        <div class="game-badge">${t2wins?'<span class="badge">W</span>':''}</div>
+      </div>
+    </div>
+    <div class="game-card-actions">
+      ${badges}
+      <span class="game-arrow">&#8250;</span>
+    </div>
+  </div>`;
+}
+
+function renderGameGroups(games, glIdx, source) {
+  const byDate = {};
+  const dateOrder = [];
+  games.forEach((r, idx) => {
+    const full = String(r[glIdx["Date"]]||"").trim();
+    const dateOnly = full.split(" ")[0];
+    if (!byDate[dateOnly]) { byDate[dateOnly] = []; dateOrder.push(dateOnly); }
+    byDate[dateOnly].push({ r, idx });
+  });
+
+  return dateOrder.map(date => `
+    <div class="date-group">
+      <div class="date-header">${formatGameDateHeader(date)}</div>
+      <div class="games-grid">
+        ${byDate[date].map(({r,idx}) => gameCardHtml(r,idx,glIdx,source)).join("")}
+      </div>
+    </div>`).join("");
+}
+
+async function ensureGameLogsLoaded() {
+  if (!gameLogData.cols.length || !skaterLogData.cols.length || !goalieLogData.cols.length) {
+    await loadGames();
+  }
+  if (!gameLogData.cols.length) throw new Error("Game Log is not loaded yet.");
+}
+
 
 // ── BOX SCORE MODAL ───────────────────────────────────────────────────────────
-function openBoxScore(gameIdx) {
-  const gameRow  = window._renderedGames[gameIdx];
+function openBoxScore(gameIdx, source) {
+  const gameList = source === "player" ? window._playerRenderedGames : window._renderedGames;
+  const gameRow  = gameList && gameList[gameIdx];
   const gameCols = window._gameLogCols;
   if (!gameRow || !gameCols) return;
 
-  const glIdx = {};
-  gameCols.forEach((c,i) => glIdx[c] = i);
+  const glIdx = getIndexMap(gameCols);
 
   const t1  = String(gameRow[glIdx["Team 1"]]||"").trim();
   const t2  = String(gameRow[glIdx["Team 2"]]||"").trim();
@@ -1669,6 +1838,7 @@ function openBoxScore(gameIdx) {
   const date = String(gameRow[glIdx["Date"]]||"").trim();
   const ot   = String(gameRow[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
   const matchId = String(gameRow[glIdx["Match ID"]]||"").trim();
+  const matchKey = normalizeMatchId(matchId);
 
   document.getElementById("box-scoreline").textContent =
     `${t1}  ${s1} – ${s2}  ${t2}`;
@@ -1678,18 +1848,16 @@ function openBoxScore(gameIdx) {
   // matchId is now just the first part (e.g. "20330647190485")
   // Skater/Goalie logs may have the full "20330647190485+20330968880391"
   // so we match on startsWith to handle both cases
-  const skIdx = {};
-  skaterLogData.cols.forEach((c,i) => skIdx[c] = i);
+  const skIdx = getIndexMap(skaterLogData.cols);
   const skRows = skaterLogData.rows.filter(r => {
     const mid = String(r[skIdx["Match ID"]]||"").trim();
-    return mid === matchId || mid.startsWith(matchId + "-") || mid.split("-")[0].trim() === matchId;
+    return mid === matchId || normalizeMatchId(mid) === matchKey;
   });
 
-  const glGIdx = {};
-  goalieLogData.cols.forEach((c,i) => glGIdx[c] = i);
+  const glGIdx = getIndexMap(goalieLogData.cols);
   const glRows = goalieLogData.rows.filter(r => {
     const mid = String(r[glGIdx["Match ID"]]||"").trim();
-    return mid === matchId || mid.startsWith(matchId + "-") || mid.split("-")[0].trim() === matchId;
+    return mid === matchId || normalizeMatchId(mid) === matchKey;
   });
 
   // Split by team
@@ -1821,21 +1989,7 @@ const GL_CARD_SECTIONS = [
     cols: ["PK Zone Clears","Shutout Periods"] },
 ];
 
-function openPlayerModal(playerName, rowData, headers, isGoalie) {
-  // Build lookup: header name -> value
-  const stats = {};
-  headers.forEach((h, i) => { stats[String(h).trim()] = String(rowData[i]||"").trim() || "-"; });
-
-  const team = stats["Team"] || "";
-  const pos  = stats["Position"] || (isGoalie ? "Goalie" : "");
-  const plat = stats["Platform"] || "";
-
-  document.getElementById("modal-name").textContent = playerName;
-  document.getElementById("modal-meta").innerHTML = `
-    <span><strong style="color:#fff">${team}</strong></span>
-    <span>${pos}</span>
-    <span>${plat.toUpperCase()}</span>`;
-
+function renderPlayerStatSections(stats, isGoalie) {
   const sections = isGoalie ? GL_CARD_SECTIONS : SK_CARD_SECTIONS;
   let html = "";
   sections.forEach(sec => {
@@ -1854,10 +2008,132 @@ function openPlayerModal(playerName, rowData, headers, isGoalie) {
     html += `<div class="stat-section-title">${sec.title}</div>
              <div class="stat-grid">${boxes}</div>`;
   });
+  return html;
+}
 
-  document.getElementById("modal-body").innerHTML = html;
+function statsFromRow(rowData, headers) {
+  const stats = {};
+  headers.forEach((h, i) => { stats[String(h).trim()] = String(rowData[i]||"").trim() || "-"; });
+  return stats;
+}
+
+function teamsMatchForCard(rowTeam, wantedTeam) {
+  const row = String(rowTeam||"").trim();
+  const wanted = String(wantedTeam||"").trim();
+  if (!wanted) return true;
+  if (row.toUpperCase() === wanted.toUpperCase()) return true;
+  return nameToAbbr(row) === wanted.toUpperCase();
+}
+
+function findCardStats(playerName, wantedTeam, isGoalie, fallbackStats) {
+  const data = isGoalie ? goalieData : playerData;
+  if (!data.cols.length) return fallbackStats || null;
+
+  const idx = getIndexMap(data.cols);
+  const nameIdx = idx["Username"];
+  const teamIdx = idx["Team"];
+  const wantedName = String(playerName||"").trim().toLowerCase();
+
+  const nameMatches = data.rows.filter(r =>
+    String(r[nameIdx]||"").trim().toLowerCase() === wantedName
+  );
+  const teamMatch = nameMatches.find(r => teamsMatchForCard(r[teamIdx], wantedTeam));
+  const row = teamMatch || nameMatches[0];
+  return row ? statsFromRow(row, data.cols) : (fallbackStats || null);
+}
+
+function openPlayerModal(playerName, rowData, headers, isGoalie) {
+  const clickedStats = statsFromRow(rowData, headers);
+  const clickedTeam = clickedStats["Team"] || "";
+  const skaterStats = findCardStats(playerName, clickedTeam, false, isGoalie ? null : clickedStats);
+  const goalieStats = findCardStats(playerName, clickedTeam, true, isGoalie ? clickedStats : null);
+  const activeRole = isGoalie && goalieStats ? "goalie" : (skaterStats ? "player" : "goalie");
+  const activeStats = activeRole === "goalie" ? goalieStats : skaterStats;
+
+  const team = (activeStats && activeStats["Team"]) || clickedTeam;
+  const pos  = activeRole === "goalie" ? "Goalie" : ((activeStats && activeStats["Position"]) || "");
+  const plat = (activeStats && activeStats["Platform"]) || clickedStats["Platform"] || "";
+
+  window._activePlayerCard = { playerName, team, skaterStats, goalieStats };
+
+  document.getElementById("modal-name").textContent = playerName;
+  document.getElementById("modal-meta").innerHTML = `
+    <span><strong style="color:#fff">${team}</strong></span>
+    <span>${pos}</span>
+    <span>${plat.toUpperCase()}</span>`;
+
+  const tabs = [];
+  if (skaterStats) tabs.push({ id: "player", label: "Player Stats" });
+  if (goalieStats) tabs.push({ id: "goalie", label: "Goalie Stats" });
+  tabs.push({ id: "games", label: "Recent Games" });
+
+  document.getElementById("modal-body").innerHTML = `
+    <div class="player-card-tabs">
+      ${tabs.map(t => `<button class="player-card-tab ${t.id===activeRole?"active":""}" data-player-tab="${t.id}" onclick="showPlayerCardTab('${t.id}')">${t.label}</button>`).join("")}
+    </div>
+    ${skaterStats ? `<div class="player-card-panel ${activeRole==="player"?"active":""}" id="player-card-player">${renderPlayerStatSections(skaterStats, false)}</div>` : ""}
+    ${goalieStats ? `<div class="player-card-panel ${activeRole==="goalie"?"active":""}" id="player-card-goalie">${renderPlayerStatSections(goalieStats, true)}</div>` : ""}
+    <div class="player-card-panel player-games-list" id="player-card-games">
+      <div class="loading">Loading player games...</div>
+    </div>`;
   document.getElementById("player-modal").classList.add("open");
   document.body.style.overflow = "hidden";
+}
+
+function showPlayerCardTab(tab) {
+  document.querySelectorAll(".player-card-tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.playerTab === tab);
+  });
+  const playerPanel = document.getElementById("player-card-player");
+  const goaliePanel = document.getElementById("player-card-goalie");
+  if (playerPanel) playerPanel.classList.toggle("active", tab === "player");
+  if (goaliePanel) goaliePanel.classList.toggle("active", tab === "goalie");
+  document.getElementById("player-card-games").classList.toggle("active", tab === "games");
+  if (tab === "games") renderPlayerRecentGames();
+}
+
+async function renderPlayerRecentGames() {
+  const panel = document.getElementById("player-card-games");
+  const card = window._activePlayerCard;
+  if (!panel || !card) return;
+  if (panel.dataset.loadedFor === `${card.playerName}|${card.team}`) return;
+
+  panel.innerHTML = `<div class="loading">Loading player games...</div>`;
+  try {
+    await ensureGameLogsLoaded();
+
+    const glIdx = getIndexMap(gameLogData.cols);
+    const wantedName = String(card.playerName||"").trim().toLowerCase();
+    const wantedTeam = String(card.team||"").trim().toUpperCase();
+    const matchIds = new Set();
+
+    [skaterLogData, goalieLogData].forEach(log => {
+      const idx = getIndexMap(log.cols);
+      log.rows
+        .filter(r => {
+          const rowName = String(r[idx["Username"]]||"").trim().toLowerCase();
+          const rowTeam = String(r[idx["Team"]]||"").trim();
+          return rowName === wantedName && teamsMatchForCard(rowTeam, wantedTeam);
+        })
+        .forEach(r => {
+          const mid = normalizeMatchId(r[idx["Match ID"]]);
+          if (mid) matchIds.add(mid);
+        });
+    });
+
+    const games = allGamesRaw
+      .filter(r => matchIds.has(normalizeMatchId(r[glIdx["Match ID"]])))
+      .sort((a,b) => String(b[glIdx["Date"]]||"").localeCompare(String(a[glIdx["Date"]]||"")));
+
+    window._playerRenderedGames = games;
+    window._gameLogCols = gameLogData.cols;
+    panel.dataset.loadedFor = `${card.playerName}|${card.team}`;
+    panel.innerHTML = games.length
+      ? renderGameGroups(games, glIdx, "player")
+      : `<div class="loading">No recent games found for this player.</div>`;
+  } catch(e) {
+    panel.innerHTML = `<div class="loading">Could not load player games: ${e.message}</div>`;
+  }
 }
 
 function closePlayerModal() {
