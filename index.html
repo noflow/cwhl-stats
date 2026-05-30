@@ -73,7 +73,7 @@
   nav button.active { background: rgba(255,255,255,0.18); color: #fff; }
 
   /* ── MAIN ── */
-  main { padding: 24px; max-width: 1600px; margin: 0 auto; }
+  main { padding: 24px; max-width: 1600px; margin: 0 auto; padding-top: 20px; }
 
   /* ── SECTION TITLE ── */
   .section-title {
@@ -82,10 +82,13 @@
     font-weight: 900;
     color: var(--teal);
     letter-spacing: 1px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     text-transform: uppercase;
     border-left: 5px solid var(--gold);
     padding-left: 12px;
+    background: var(--ice);
+    padding-top: 8px;
+    padding-bottom: 4px;
   }
 
   /* ── CONTROLS ── */
@@ -95,6 +98,11 @@
     margin-bottom: 14px;
     flex-wrap: wrap;
     align-items: center;
+    background: var(--ice);
+    padding: 8px 0;
+    position: sticky;
+    top: 64px;
+    z-index: 20;
   }
   .search-box {
     display: flex;
@@ -141,9 +149,16 @@
   /* ── TABLE WRAPPER ── */
   .table-wrap {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: calc(100vh - 180px);
     border-radius: 8px;
     box-shadow: 0 2px 16px rgba(0,0,0,0.08);
     background: #fff;
+  }
+  .table-wrap thead tr {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
   table {
     width: 100%;
@@ -151,12 +166,11 @@
     font-size: 13px;
     min-width: 900px;
   }
+  table td, table th { min-width: 48px; }
+  table th:first-child, table td:first-child { min-width: 36px; max-width: 36px; width: 36px; }
   thead tr {
     background: var(--teal);
     color: #fff;
-    position: sticky;
-    top: 64px;
-    z-index: 10;
   }
   thead th {
     font-family: 'Barlow Condensed', sans-serif;
@@ -185,10 +199,10 @@
     white-space: nowrap;
     color: var(--black);
   }
-  tbody td:first-child { text-align: left; padding-left: 14px; font-weight: 600; }
-  .rank-cell { color: var(--grey3); font-size: 12px; width: 32px; }
-  .player-name { font-weight: 600; color: var(--teal); }
-  .team-badge {
+  tbody td:first-child { text-align: left; padding-left: 14px; font-weight: 600; min-width: 150px; }
+  .rank-cell { color: var(--grey3); font-size: 12px; width: 32px; min-width: 32px; text-align: center; }
+  .player-name { font-weight: 600; color: var(--teal); min-width: 150px; display: inline-block; }
+  .team-badge { min-width: 40px;
     display: inline-block;
     background: var(--teal3);
     color: var(--teal);
