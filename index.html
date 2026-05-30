@@ -713,36 +713,46 @@ function renderPlayers() {
   // Sort
   const {col, dir} = sortState.players;
   filtered.sort((a,b) => {
-    const av = a[col]; const bv = b[col];
+    const av = String(a[col]||"").replace("%","").replace("+","");
+    const bv = String(b[col]||"").replace("%","").replace("+","");
     const an = parseFloat(av); const bn = parseFloat(bv);
     if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
-    return String(av).localeCompare(String(bv)) * dir;
+    return av.localeCompare(bv) * dir;
   });
 
-  // Re-rank after filter/sort
   document.getElementById("player-count").textContent = `${filtered.length} players`;
 
-  // cols[0] = "#", cols[1] = "Username", etc.
-  // data rows also start with rank number in col 0
   const hdrs = playerData.cols;
-  const advStart = hdrs.length - 4; // last 4 are EV Sh%, EVO, GAR, WAR
 
-  const headers = hdrs.slice(1).map((c, i) => {
-    const colIdx = i + 1;
-    const ss = sortState.players;
-    const cls = ss.col === colIdx ? (ss.dir === 1 ? "sorted-asc" : "sorted-desc") : "";
-    return `<th class="${cls}" onclick="sortTable('players',${colIdx})">${c}</th>`;
+  // Columns hidden from main table — only shown on player card
+  // Hidden: W, L, T (card Record section), EV Sh%, EVO, GAR, WAR (card Advanced section)
+  const HIDDEN_MAIN = new Set(["W","L","T","EV Sh%","EVO","GAR","WAR"]);
+
+  // PTS column index for highlighting (changes if W/L/T added before it)
+  const ptsColIdx = hdrs.findIndex(h => h.trim() === "PTS");
+
+  // Build display column list (skip col 0 = #, skip hidden cols)
+  // We keep col indices into the original row for data access
+  const displayColIdxs = hdrs.map((h,i) => i)
+    .filter(i => i > 0 && !HIDDEN_MAIN.has(String(hdrs[i]||"").trim()));
+
+  const headers = displayColIdxs.map(origIdx => {
+    const c   = hdrs[origIdx];
+    const ss  = sortState.players;
+    // Sort col maps to display position
+    const dispPos = displayColIdxs.indexOf(origIdx);
+    const cls = ss.col === origIdx ? (ss.dir === 1 ? "sorted-asc" : "sorted-desc") : "";
+    return `<th class="${cls}" onclick="sortTable('players',${origIdx})">${c}</th>`;
   });
 
   const bodyRows = filtered.map((r, rank) => {
-    const cells = r.slice(1).map((v, i) => {
-      const colIdx = i + 1;
-      if (colIdx === 1) return makeClickable(v || "-", r, playerData.cols, false);
-      if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
-      if (colIdx === 3) return `<td><span class="pos-badge">${posShort(v)}</span></td>`;
-      if (colIdx === 7) return `<td class="pts-cell">${v || "-"}</td>`;
-      if (colIdx >= advStart) return `<td class="adv-cell">${v || "-"}</td>`;
-      return `<td>${v !== null && v !== "" ? v : "-"}</td>`;
+    const cells = displayColIdxs.map(origIdx => {
+      const v = String(r[origIdx] || "").trim() || "-";
+      if (origIdx === 1) return makeClickable(r[origIdx] || "-", r, playerData.cols, false);
+      if (origIdx === 2) return `<td><span class="team-badge">${v}</span></td>`;
+      if (origIdx === 3) return `<td><span class="pos-badge">${posShort(r[origIdx])}</span></td>`;
+      if (origIdx === ptsColIdx) return `<td class="pts-cell">${v}</td>`;
+      return `<td>${v}</td>`;
     });
     return `<tr><td class="rank-cell">${rank+1}</td>${cells.join("")}</tr>`;
   });
@@ -817,10 +827,10 @@ function renderGoalies() {
 }
 
 // ── SORT ──────────────────────────────────────────────────────────────────────
-function sortTable(which, colIdx) {
+function sortTable(which, origIdx) {
   const ss = sortState[which];
-  if (ss.col === colIdx) { ss.dir *= -1; }
-  else { ss.col = colIdx; ss.dir = -1; }
+  if (ss.col === origIdx) { ss.dir *= -1; }
+  else { ss.col = origIdx; ss.dir = -1; }
   which === "players" ? renderPlayers() : renderGoalies();
 }
 
