@@ -435,27 +435,29 @@ const TEAMS = [
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
 async function fetchTab(tabName) {
-  // Use gviz with headers=0 so ALL rows come back as data rows
-  // (no row gets auto-promoted to column headers)
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=0`;
+  // headers=1 tells gviz the first row IS the header — it returns col labels
+  // AND all data rows separately, so we get clean header + data split
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
-  // gviz wraps in google.visualization.Query.setResponse(...)
   const json = JSON.parse(text.substring(47, text.length - 2));
   const numCols = json.table.cols.length;
-  const rows = json.table.rows.map(r => {
+  // col labels come from json.table.cols[i].label
+  const cols = json.table.cols.map(c => String(c.label || ""));
+  const rows = (json.table.rows || []).map(r => {
     const cells = [];
     for (let i = 0; i < numCols; i++) {
       const cell = r.c ? r.c[i] : null;
-      // Use formatted value (f) if available, else raw value (v)
-      const val = cell ? (cell.f !== null && cell.f !== undefined ? cell.f : 
-                         (cell.v !== null && cell.v !== undefined ? String(cell.v) : "")) : "";
+      const val = cell
+        ? (cell.f !== null && cell.f !== undefined ? cell.f
+          : (cell.v !== null && cell.v !== undefined ? String(cell.v) : ""))
+        : "";
       cells.push(String(val));
     }
     return cells;
   });
-  return { cols: [], rows, numCols };
+  return { cols, rows, numCols };
 }
 
 // ── PAGE SWITCHING ────────────────────────────────────────────────────────────
@@ -473,10 +475,9 @@ const sortState = { players: {col: 7, dir: -1}, goalies: {col: 10, dir: -1} };
 async function loadStandings() {
   try {
     const { cols, rows } = await fetchTab("Standings");
-    // CSV: rows[0] = header, rows[1:] = data
-    const dataRows = rows.slice(1);
+    // rows are data-only (gviz headers=1 already separated header)
     const teamData = {};
-    dataRows.forEach(r => {
+    rows.forEach(r => {
       const team = String(r[0] || "").trim();
       if (!team || team === "TEAM" || !r[1]) return;
       teamData[team] = {
@@ -564,8 +565,8 @@ function posShort(pos) {
 async function loadPlayers() {
   try {
     const raw = await fetchTab("Player Stats");
-    // CSV: skip header row, store just data rows but keep cols for headers
-    playerData = { cols: raw.rows[0] || [], rows: raw.rows.slice(1), numCols: raw.numCols };
+    // cols come from gviz col labels (row 1 of sheet), rows are data only
+    playerData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols };
     const teams = [...new Set(playerData.rows.map(r => String(r[2]||"")).filter(Boolean))].sort();
     const sel = document.getElementById("team-filter");
     teams.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o); });
@@ -645,7 +646,7 @@ let goalieData = { cols: [], rows: [] };
 async function loadGoalies() {
   try {
     const rawG = await fetchTab("Goalie Stats");
-    goalieData = { cols: rawG.rows[0] || [], rows: rawG.rows.slice(1), numCols: rawG.numCols };
+    goalieData = { cols: rawG.cols, rows: rawG.rows, numCols: rawG.numCols };
     renderGoalies();
   } catch(e) {
     document.getElementById("goalie-table-wrap").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
