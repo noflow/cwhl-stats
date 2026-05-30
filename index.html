@@ -332,6 +332,120 @@
     font-size: 12px;
     margin-top: 40px;
   }
+
+  /* ── PLAYER CARD MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.3);
+    animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .modal-header {
+    background: var(--teal);
+    color: #fff;
+    padding: 20px 24px 16px;
+    border-radius: 12px 12px 0 0;
+    position: relative;
+  }
+  .modal-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .modal-meta {
+    font-size: 13px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 4px;
+    display: flex;
+    gap: 16px;
+  }
+  .modal-meta span { display: flex; align-items: center; gap: 5px; }
+  .modal-close {
+    position: absolute;
+    top: 16px; right: 18px;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.3); }
+  .modal-body { padding: 20px 24px 24px; }
+  .stat-section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--grey3);
+    margin: 18px 0 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--grey2);
+  }
+  .stat-section-title:first-child { margin-top: 0; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+  }
+  .stat-box {
+    background: var(--ice);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+    border: 1px solid var(--grey2);
+  }
+  .stat-box.highlight { background: var(--teal3); border-color: var(--teal); }
+  .stat-box.advanced  { background: #fef9f0; border-color: #f39c12; }
+  .stat-val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--teal);
+    line-height: 1;
+  }
+  .stat-box.highlight .stat-val { color: var(--teal); }
+  .stat-box.advanced  .stat-val { color: var(--gold); }
+  .stat-lbl {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--grey3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+  .player-name.clickable {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+  }
+  .player-name.clickable:hover { color: var(--teal2); }
 </style>
 </head>
 <body>
@@ -623,7 +737,7 @@ function renderPlayers() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = r.slice(1).map((v, i) => {
       const colIdx = i + 1;
-      if (colIdx === 1) return `<td class="player-name">${v || "-"}</td>`;
+      if (colIdx === 1) return makeClickable(v || "-", r, playerData.cols, false);
       if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
       if (colIdx === 3) return `<td><span class="pos-badge">${posShort(v)}</span></td>`;
       if (colIdx === 7) return `<td class="pts-cell">${v || "-"}</td>`;
@@ -687,7 +801,7 @@ function renderGoalies() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = r.slice(1).map((v, i) => {
       const colIdx = i + 1;
-      if (colIdx === 1) return `<td class="player-name">${v || "-"}</td>`;
+      if (colIdx === 1) return makeClickable(v || "-", r, playerData.cols, false);
       if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
       if (colIdx === 10) return `<td class="pts-cell">${v || "-"}</td>`;
       return `<td>${v !== null && v !== "" ? v : "-"}</td>`;
@@ -760,10 +874,6 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
   const skHeaders = sk.cols;
   const glHeaders = gl.cols;
 
-  // Debug: log unique team values in col 2
-  const uniqueTeams = [...new Set(sk.rows.map(r => String(r[2]||"").trim()))];
-  console.log("Unique team values in Player Stats col 2:", uniqueTeams);
-  console.log("Filtering for abbr:", abbr);
 
   // Match team value against target abbreviation
   // Handles: exact abbr match, full name match, case-insensitive, partial
@@ -794,7 +904,6 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
 
   const skRows = sk.rows.filter(r => matchesTeam(r[2], abbr));
   const glRows = gl.rows.filter(r => matchesTeam(r[2], abbr));
-  console.log("skRows found:", skRows.length, "glRows found:", glRows.length);
 
   // Find PTS and SV% column indices
   const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
@@ -803,44 +912,79 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
   // Sort skaters by PTS desc
   skRows.sort((a,b) => (parseFloat(b[ptsIdx]||0) - parseFloat(a[ptsIdx]||0)));
 
-  // Build totals row for skaters
-  const sumCols = [4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40];
+  // Build totals row — sum counting stats by column name
+  // Non-summable: #, Username, Team, Platform, Position, per-game rates, percentages, ratings, advanced
+  const NON_SUM = new Set(["#","Username","Team","Platform","Position",
+    "Pts/GP","G/GP","A/GP","Shot %","Shots On Net %","Pass %","Faceoff %",
+    "Offense Rating","Defense Rating","Teamplay Rating",
+    "EV Sh%","EVO","GAR","WAR","Plus Minus","Possession (mins)","TOI (mins)"]);
+
   const totals = new Array(skHeaders.length).fill("");
   totals[0] = "TOTAL";
   if (skRows.length) {
-    sumCols.forEach(ci => {
-      if (ci < skHeaders.length) {
-        const sum = skRows.reduce((acc, r) => acc + (parseFloat(r[ci]||0)||0), 0);
-        // Only show integer sums for counting stats
-        totals[ci] = Number.isInteger(sum) || sum === Math.round(sum) ? Math.round(sum) : sum.toFixed(2);
-      }
+    skHeaders.forEach((h, ci) => {
+      const hName = String(h||"").trim();
+      if (!hName || NON_SUM.has(hName)) return;
+      const sum = skRows.reduce((acc, r) => acc + (parseFloat(r[ci]||0)||0), 0);
+      totals[ci] = Number.isInteger(sum) || Math.abs(sum - Math.round(sum)) < 0.001
+        ? Math.round(sum) : sum.toFixed(2);
     });
-    // GP = number of rows
-    totals[3] = skRows.reduce((acc,r) => acc + (parseInt(r[3])||0), 0);
+    // Plus Minus: sum it (it can be negative)
+    const pmIdx = skHeaders.findIndex(h => String(h).trim() === "Plus Minus");
+    if (pmIdx !== -1) {
+      const pmSum = skRows.reduce((acc,r) => acc + (parseInt(r[pmIdx]||0)||0), 0);
+      totals[pmIdx] = pmSum > 0 ? "+" + pmSum : String(pmSum);
+    }
+    // TOI: sum minutes
+    const toiIdx = skHeaders.findIndex(h => String(h).trim() === "TOI (mins)");
+    if (toiIdx !== -1) {
+      totals[toiIdx] = skRows.reduce((acc,r) => acc + (parseFloat(r[toiIdx]||0)||0), 0).toFixed(1);
+    }
   }
 
+  // For team tabs: skip col 0 (#/rank) and col 2 (Team abbr - redundant)
+  // skater cols: 0=#, 1=Username, 2=Team, 3=Platform, 4=Position, 5=GP, 6=G...
+  // goalie cols: 0=#, 1=Username, 2=Team, 3=Platform, 4=GP, 5=W...
+  const SKIP_COLS = new Set([0, 2]); // skip # and Team columns
+
   function makeTable(headers, dataRows, highlightCol, totalRow) {
-    // Trim to last non-empty header
+    // Find last non-empty header
     let lastCol = 0;
     headers.forEach((h,i) => { if (String(h||"").trim()) lastCol = i; });
     const useCols = lastCol + 1;
 
-    const hdr = headers.slice(0, useCols).map((h,i) =>
-      `<th onclick="sortTeamTable(this,${i})" style="cursor:pointer;white-space:nowrap">${String(h||"").trim()}</th>`
-    ).join("");
+    // Build index map: original col index -> display col index (skipping SKIP_COLS)
+    const displayCols = [];
+    for (let i = 0; i < useCols; i++) {
+      if (!SKIP_COLS.has(i)) displayCols.push(i);
+    }
+
+    const hdr = displayCols.map((origIdx, dispIdx) => {
+      const h = String(headers[origIdx]||"").trim();
+      return `<th onclick="sortTeamTable(this,${dispIdx})" style="cursor:pointer;white-space:nowrap">${h}</th>`;
+    }).join("");
 
     const body = dataRows.map(r =>
-      `<tr>${r.slice(0, useCols).map((v,i) => {
-        const val = String(v||"").trim() || "-";
-        if (i === 0) return `<td class="player-name">${val}</td>`;
-        if (i === highlightCol) return `<td class="pts-cell">${val}</td>`;
-        return `<td>${val}</td>`;
+      `<tr>${displayCols.map((origIdx, dispIdx) => {
+        const v = String(r[origIdx]||"").trim() || "-";
+        if (origIdx === 1) {
+          // Build full rowData with all original cols for the modal
+          const fullRow = displayCols.map(i => String(r[i]||"").trim());
+          const fullHdrs = displayCols.map(i => String(headers[i]||"").trim());
+          // Add Team back for modal context
+          const teamVal = String(r[2]||"").trim();
+          const rowWithTeam = [...r];
+          const hdrsWithTeam = [...headers];
+          return makeClickable(v, rowWithTeam, hdrsWithTeam, false);
+        }
+        if (origIdx === highlightCol) return `<td class="pts-cell">${v}</td>`; // PTS or SV%
+        return `<td>${v}</td>`;
       }).join("")}</tr>`
     ).join("");
 
     const tot = totalRow
-      ? `<tr class="totals-row">${totalRow.slice(0,useCols).map(v =>
-          `<td>${String(v||"").trim()}</td>`).join("")}</tr>`
+      ? `<tr class="totals-row">${displayCols.map(origIdx =>
+          `<td>${String(totalRow[origIdx]||"").trim()}</td>`).join("")}</tr>`
       : "";
 
     return body
@@ -886,11 +1030,109 @@ function sortTeamTable(th, colIdx) {
   if (totalsRow) tbody.appendChild(totalsRow);
 }
 
+
+// ── PLAYER CARD MODAL ─────────────────────────────────────────────────────────
+
+// Skater stat sections for the card layout
+const SK_CARD_SECTIONS = [
+  { title: "Record",
+    cols: ["GP","W","L","T"], highlight: ["W"] },
+  { title: "Scoring",
+    cols: ["G","A","PTS","Pts/GP","G/GP","A/GP","PPG","SHG","ES Goals","GWGs"], highlight: ["PTS","G","A"] },
+  { title: "Shooting",
+    cols: ["Shots","Shot Attempts","Shot %","Shots On Net %","EV Sh%"], highlight: ["Shot %"] },
+  { title: "Defence",
+    cols: ["Hits","Blocked Shots","Takeaways","Interceptions","Deflections","Giveaways","Plus Minus","PIMs","Penalties Drawn","PK Zone Clears"] },
+  { title: "Passing & Puck",
+    cols: ["Pass Attempts","Passes","Pass %","Saucer Passes","Faceoff Wins","Faceoff Losses","Faceoff %","Possession (mins)"] },
+  { title: "Ice Time",
+    cols: ["TOI (mins)","Offense Rating","Defense Rating","Teamplay Rating"] },
+  { title: "Advanced",
+    cols: ["EVO","GAR","WAR"], advanced: true },
+];
+
+const GL_CARD_SECTIONS = [
+  { title: "Record",
+    cols: ["GP","W","L"], highlight: ["W"] },
+  { title: "Goals",
+    cols: ["Goals Against","GAA","Saves","Shots Against","Save %"], highlight: ["Save %","GAA"] },
+  { title: "Special Saves",
+    cols: ["Breakaway Saves","Breakaway Save %","Penalty Shot Saves","Penalty Shot Save %","Diving Saves","Pokechecks"] },
+  { title: "Other",
+    cols: ["PK Zone Clears","Shutout Periods"] },
+];
+
+function openPlayerModal(playerName, rowData, headers, isGoalie) {
+  // Build lookup: header name -> value
+  const stats = {};
+  headers.forEach((h, i) => { stats[String(h).trim()] = String(rowData[i]||"").trim() || "-"; });
+
+  const team = stats["Team"] || "";
+  const pos  = stats["Position"] || (isGoalie ? "Goalie" : "");
+  const plat = stats["Platform"] || "";
+
+  document.getElementById("modal-name").textContent = playerName;
+  document.getElementById("modal-meta").innerHTML = `
+    <span><strong style="color:#fff">${team}</strong></span>
+    <span>${pos}</span>
+    <span>${plat.toUpperCase()}</span>`;
+
+  const sections = isGoalie ? GL_CARD_SECTIONS : SK_CARD_SECTIONS;
+  let html = "";
+  sections.forEach(sec => {
+    const boxes = sec.cols
+      .filter(col => stats[col] !== undefined && stats[col] !== "-")
+      .map(col => {
+        const isHL  = sec.highlight && sec.highlight.includes(col);
+        const isAdv = sec.advanced;
+        return `
+          <div class="stat-box ${isHL ? "highlight" : ""} ${isAdv ? "advanced" : ""}">
+            <div class="stat-val">${stats[col] || "-"}</div>
+            <div class="stat-lbl">${col}</div>
+          </div>`;
+      }).join("");
+    if (!boxes) return;
+    html += `<div class="stat-section-title">${sec.title}</div>
+             <div class="stat-grid">${boxes}</div>`;
+  });
+
+  document.getElementById("modal-body").innerHTML = html;
+  document.getElementById("player-modal").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closePlayerModal() {
+  document.getElementById("player-modal").classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById("player-modal")) closePlayerModal();
+}
+
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePlayerModal(); });
+
+// Make a player-name cell clickable
+function makeClickable(name, rowData, headers, isGoalie) {
+  return `<td class="player-name clickable" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie})'>${name}</td>`;
+}
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadStandings();
 loadPlayers();
 loadGoalies();
 loadTeams();
 </script>
+
+<!-- PLAYER CARD MODAL -->
+<div class="modal-overlay" id="player-modal" onclick="closeModal(event)">
+  <div class="modal-card" id="modal-card">
+    <div class="modal-header">
+      <div class="modal-name" id="modal-name">Player</div>
+      <div class="modal-meta" id="modal-meta"></div>
+      <button class="modal-close" onclick="closePlayerModal()">&#10005;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
 </body>
 </html>
