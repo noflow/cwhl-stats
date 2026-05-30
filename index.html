@@ -1297,6 +1297,7 @@ async function showTeam(abbr, btn) {
     // Filter from master player/goalie data instead of team-specific tab
     // This avoids gviz issues with merged cells on team tabs
     await ensureMasterDataLoaded();
+    try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Game logs unavailable for current roster mapping", e); }
     teamCache[abbr] = { sk: playerData, gl: goalieData };
     renderTeamFromMaster(abbr, teamCache[abbr]);
   } catch(e) {
@@ -1308,6 +1309,137 @@ async function ensureMasterDataLoaded() {
   // Load player/goalie data if not already loaded
   if (!playerData.cols.length) await loadPlayers();
   if (!goalieData.cols.length) await loadGoalies();
+}
+
+function cleanPlayerName(name) {
+  return String(name||"").trim().toLowerCase();
+}
+
+function parseStatNumber(v) {
+  const n = parseFloat(String(v||"").replace("%","").replace("+",""));
+  return isNaN(n) ? 0 : n;
+}
+
+function formatStatNumber(n) {
+  return Math.abs(n - Math.round(n)) < 0.001 ? String(Math.round(n)) : n.toFixed(2);
+}
+
+function formatRate(n) {
+  if (!isFinite(n)) return "-";
+  return Math.abs(n - Math.round(n)) < 0.001 ? String(Math.round(n)) : n.toFixed(2);
+}
+
+function formatPct(n) {
+  if (!isFinite(n)) return "-";
+  return n.toFixed(1) + "%";
+}
+
+function buildCurrentTeamMap() {
+  const latest = {};
+  [skaterLogData, goalieLogData].forEach(log => {
+    if (!log.cols.length) return;
+    const idx = getIndexMap(log.cols);
+    log.rows.forEach(r => {
+      const name = cleanPlayerName(r[idx["Username"]]);
+      const team = nameToAbbr(r[idx["Team"]]);
+      const date = String(r[idx["Date"]]||"").trim();
+      if (!name || !team) return;
+      if (!latest[name] || date >= latest[name].date) {
+        latest[name] = { team, date };
+      }
+    });
+  });
+  return latest;
+}
+
+function weightedAverage(rows, headers, colName, weightName) {
+  const colIdx = headers.findIndex(h => String(h).trim() === colName);
+  const weightIdx = headers.findIndex(h => String(h).trim() === weightName);
+  if (colIdx === -1 || weightIdx === -1) return null;
+  let total = 0, weight = 0;
+  rows.forEach(r => {
+    const w = parseStatNumber(r[weightIdx]);
+    total += parseStatNumber(r[colIdx]) * w;
+    weight += w;
+  });
+  return weight ? total / weight : null;
+}
+
+function aggregatePlayerRows(rows, headers, targetAbbr, isGoalie) {
+  const idx = getIndexMap(headers);
+  const base = rows.find(r => teamsMatchForCard(r[idx["Team"]], targetAbbr)) || rows[0];
+  const out = [...base];
+  const sumCols = new Map();
+
+  headers.forEach((h, ci) => {
+    const col = String(h||"").trim();
+    if (!col || ["#","Username","Team","Platform","Position"].includes(col)) return;
+    sumCols.set(col, rows.reduce((acc, r) => acc + parseStatNumber(r[ci]), 0));
+  });
+
+  headers.forEach((h, ci) => {
+    const col = String(h||"").trim();
+    if (col === "#") out[ci] = "";
+    else if (col === "Team") out[ci] = targetAbbr;
+    else if (sumCols.has(col)) out[ci] = formatStatNumber(sumCols.get(col));
+  });
+
+  const getSum = col => sumCols.get(col) || 0;
+  const setCol = (col, val) => { const ci = idx[col]; if (ci !== undefined) out[ci] = val; };
+  const gp = getSum("GP");
+
+  if (!isGoalie) {
+    const g = getSum("G"), a = getSum("A"), pts = getSum("PTS") || g + a;
+    const shotAttempts = getSum("Shot Attempts");
+    const shots = getSum("Shots");
+    const passAttempts = getSum("Pass Attempts");
+    const passes = getSum("Passes");
+    const fow = getSum("Faceoff Wins");
+    const fol = getSum("Faceoff Losses");
+
+    setCol("PTS", formatStatNumber(pts));
+    setCol("Pts/GP", gp ? formatRate(pts / gp) : "-");
+    setCol("G/GP", gp ? formatRate(g / gp) : "-");
+    setCol("A/GP", gp ? formatRate(a / gp) : "-");
+    setCol("Shot %", shotAttempts ? formatPct((g / shotAttempts) * 100) : "-");
+    setCol("Shots On Net %", shotAttempts ? formatPct((shots / shotAttempts) * 100) : "-");
+    setCol("Pass %", passAttempts ? formatPct((passes / passAttempts) * 100) : "-");
+    setCol("Faceoff %", (fow + fol) ? formatPct((fow / (fow + fol)) * 100) : "-");
+  } else {
+    const ga = getSum("Goals Against");
+    const saves = getSum("Saves");
+    const shotsAgainst = getSum("Shots Against");
+    setCol("GAA", gp ? formatRate(ga / gp) : "-");
+    setCol("Save %", shotsAgainst ? formatPct((saves / shotsAgainst) * 100) : "-");
+  }
+
+  ["Offense Rating","Defense Rating","Teamplay Rating"].forEach(col => {
+    const avg = weightedAverage(rows, headers, col, "GP");
+    if (avg !== null) setCol(col, formatRate(avg));
+  });
+
+  return out;
+}
+
+function buildCurrentRosterRows(rows, headers, targetAbbr, isGoalie, currentTeams) {
+  const idx = getIndexMap(headers);
+  const byName = new Map();
+  rows.forEach(r => {
+    const name = cleanPlayerName(r[idx["Username"]]);
+    if (!name) return;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(r);
+  });
+
+  const rosterRows = [];
+  byName.forEach((playerRows, name) => {
+    const currentTeam = currentTeams[name]?.team || "";
+    const belongsHere = currentTeam
+      ? currentTeam === targetAbbr
+      : playerRows.some(r => teamsMatchForCard(r[idx["Team"]], targetAbbr));
+    if (belongsHere) rosterRows.push(aggregatePlayerRows(playerRows, headers, targetAbbr, isGoalie));
+  });
+  return rosterRows;
 }
 
 function renderTeamFromMaster(abbr, { sk, gl }) {
@@ -1345,8 +1477,9 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
     return keywords.some(kw => vLower.includes(kw));
   }
 
-  const skRows = sk.rows.filter(r => matchesTeam(r[2], abbr));
-  const glRows = gl.rows.filter(r => matchesTeam(r[2], abbr));
+  const currentTeams = buildCurrentTeamMap();
+  const skRows = buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams);
+  const glRows = buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams);
 
   // Find PTS and SV% column indices
   const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
