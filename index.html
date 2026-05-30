@@ -732,86 +732,100 @@ function renderTeam(abbr, { cols, rows }) {
   const team = TEAMS.find(t => t.abbr === abbr);
   const teamName = team ? team.name.toUpperCase() : abbr;
 
-  // Find the split point between skaters and goalies
-  // Look for a row that contains "GOALIES" label
-  let goalieStart = -1;
-  let skaterHeaderRow = -1;
-  let goalieHeaderRow = -1;
+  // The team tab structure from the publisher is:
+  // Row 0: team banner (MONTREAL CANADIENS)
+  // Row 1: -- SKATERS -- label
+  // Row 2: skater column headers (Username, Platform, Position, GP, G, A, PTS...)
+  // Rows 3+: skater data rows
+  // Row N: TOTAL row
+  // Row N+1: blank spacer
+  // Row N+2: -- GOALIES -- label
+  // Row N+3: goalie column headers (Username, Platform, GP, W, L...)
+  // Rows N+4+: goalie data rows
 
-  rows.forEach((r, i) => {
-    const first = String(r[0]||"").trim();
-    if (first.includes("SKATER") && skaterHeaderRow === -1) skaterHeaderRow = i + 1;
-    if (first.includes("GOALIE") && goalieStart === -1) goalieStart = i;
-  });
+  let skHdrIdx = -1, glHdrIdx = -1, totalRowData = null;
+  const skRows = [], glRows = [];
 
-  // Skater rows: after header row (skaterHeaderRow+1) up to spacer before goalies
-  // Find the actual header row (Username, Platform, etc.)
-  let skHdrIdx = -1, glHdrIdx = -1;
+  // Find header rows by looking for "Username" in first cell
   rows.forEach((r, i) => {
-    const first = String(r[0]||"").trim();
-    if (first === "Username" && skHdrIdx === -1) skHdrIdx = i;
-    else if (first === "Username" && skHdrIdx !== -1) glHdrIdx = i;
+    const first = String(r[0] || "").trim();
+    if (first === "Username") {
+      if (skHdrIdx === -1) skHdrIdx = i;
+      else if (glHdrIdx === -1) glHdrIdx = i;
+    }
+    if (first === "TOTAL") totalRowData = r;
   });
 
   if (skHdrIdx === -1) {
-    document.getElementById("team-content").innerHTML = `<div class="loading">No data for ${abbr} yet.</div>`;
+    document.getElementById("team-content").innerHTML =
+      `<div class="loading">No data for ${abbr} yet.</div>`;
     return;
   }
 
-  const skHeaders = rows[skHdrIdx] || [];
+  // Collect skater rows: between skHdrIdx+1 and glHdrIdx (or end)
+  const skHeaders = rows[skHdrIdx];
   const glHeaders = glHdrIdx !== -1 ? rows[glHdrIdx] : [];
+  const skEnd = glHdrIdx !== -1 ? glHdrIdx : rows.length;
 
-  const skRows = [];
-  const glRows = [];
-  let inGoalies = false;
-  let isTotalRow = false;
-  let totalRow = null;
+  for (let i = skHdrIdx + 1; i < skEnd; i++) {
+    const first = String(rows[i][0] || "").trim();
+    // Skip blank rows, TOTAL row, section labels
+    if (!first || first === "TOTAL" || first.startsWith("--") || first.startsWith("\u2500")) continue;
+    skRows.push(rows[i]);
+  }
 
-  rows.forEach((r, i) => {
-    if (i <= skHdrIdx) return;
-    const first = String(r[0]||"").trim();
-    if (first === "TOTAL") { totalRow = r; return; }
-    if (first.includes("GOALIE") || i === goalieStart) { inGoalies = true; return; }
-    if (i === glHdrIdx) { inGoalies = true; return; }
-    if (first === "" && inGoalies) return;
-    if (!first) return;
-    if (inGoalies && glHdrIdx !== -1 && i > glHdrIdx) { glRows.push(r); }
-    else if (!inGoalies) { skRows.push(r); }
-  });
+  // Collect goalie rows: after glHdrIdx+1
+  if (glHdrIdx !== -1) {
+    for (let i = glHdrIdx + 1; i < rows.length; i++) {
+      const first = String(rows[i][0] || "").trim();
+      if (!first || first.startsWith("--") || first.startsWith("\u2500")) continue;
+      glRows.push(rows[i]);
+    }
+  }
 
   function makeTable(headers, dataRows, highlightCol, totalRow) {
-    const hdr = headers.map((h,i) =>
-      `<th onclick="sortTeamTable(this, ${i})" style="cursor:pointer">${h||""}</th>`
+    // Filter out empty trailing columns
+    let lastNonEmpty = 0;
+    headers.forEach((h, i) => { if (String(h||"").trim()) lastNonEmpty = i; });
+    const useCols = lastNonEmpty + 1;
+
+    const hdr = headers.slice(0, useCols).map((h, i) =>
+      `<th onclick="sortTeamTable(this, ${i})" style="cursor:pointer;white-space:nowrap">${String(h||"").trim()}</th>`
     ).join("");
 
     const body = dataRows.map(r =>
-      `<tr>${r.map((v,i) => {
-        const val = v !== null && v !== "" ? v : "-";
+      `<tr>${r.slice(0, useCols).map((v, i) => {
+        const val = (v !== null && v !== undefined && v !== "") ? v : "-";
         if (i === 0) return `<td class="player-name">${val}</td>`;
         if (i === highlightCol) return `<td class="pts-cell">${val}</td>`;
         return `<td>${val}</td>`;
       }).join("")}</tr>`
     ).join("");
 
-    const tot = totalRow ? `<tr class="totals-row">${totalRow.map((v,i) => `<td>${v !== null && v !== "" ? v : ""}</td>`).join("")}</tr>` : "";
+    const tot = totalRow
+      ? `<tr class="totals-row">${totalRow.slice(0, useCols).map(v =>
+          `<td>${(v !== null && v !== undefined && v !== "") ? v : ""}</td>`
+        ).join("")}</tr>`
+      : "";
 
     return `<table><thead><tr>${hdr}</tr></thead><tbody>${body}${tot}</tbody></table>`;
   }
 
-  // Find PTS column index in skater headers
   const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
 
   document.getElementById("team-content").innerHTML = `
     <div style="background:#fff;border-radius:8px;box-shadow:0 2px 16px rgba(0,0,0,0.08);overflow:hidden;margin-bottom:24px;">
       <div class="team-banner">${teamName}</div>
       <div class="subsection-label">Skaters</div>
-      <div class="table-wrap" style="border-radius:0;box-shadow:none;">
-        ${makeTable(skHeaders, skRows, ptsIdx, totalRow)}
+      <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
+        ${skRows.length ? makeTable(skHeaders, skRows, ptsIdx, totalRowData)
+          : "<p style='padding:16px;color:#888'>No skater data</p>"}
       </div>
       ${glHeaders.length ? `
         <div class="subsection-label" style="margin-top:2px;">Goalies</div>
-        <div class="table-wrap" style="border-radius:0;box-shadow:none;">
-          ${makeTable(glHeaders, glRows, 10, null)}
+        <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
+          ${glRows.length ? makeTable(glHeaders, glRows, 10, null)
+            : "<p style='padding:16px;color:#888'>No goalie data</p>"}
         </div>` : ""}
     </div>`;
 }
