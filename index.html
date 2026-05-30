@@ -435,26 +435,27 @@ const TEAMS = [
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
 async function fetchTab(tabName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
-  const res  = await fetch(url);
+  // Use gviz with headers=0 so ALL rows come back as data rows
+  // (no row gets auto-promoted to column headers)
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=0`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
+  // gviz wraps in google.visualization.Query.setResponse(...)
   const json = JSON.parse(text.substring(47, text.length - 2));
-  // gviz returns col labels from row 1 only if row 1 has data
-  // We want ALL rows including header rows as raw data
-  // Use the raw rows array - each row has .c array of cells
   const numCols = json.table.cols.length;
   const rows = json.table.rows.map(r => {
     const cells = [];
     for (let i = 0; i < numCols; i++) {
       const cell = r.c ? r.c[i] : null;
-      cells.push(cell && cell.v !== null && cell.v !== undefined ? String(cell.v) : "");
+      // Use formatted value (f) if available, else raw value (v)
+      const val = cell ? (cell.f !== null && cell.f !== undefined ? cell.f : 
+                         (cell.v !== null && cell.v !== undefined ? String(cell.v) : "")) : "";
+      cells.push(String(val));
     }
     return cells;
   });
-  // The col labels from gviz are unreliable for sheets with merged cells
-  // so we return cols as empty and use row data directly
-  const cols = json.table.cols.map(c => c.label || "");
-  return { cols, rows, numCols };
+  return { cols: [], rows, numCols };
 }
 
 // ── PAGE SWITCHING ────────────────────────────────────────────────────────────
@@ -472,14 +473,10 @@ const sortState = { players: {col: 7, dir: -1}, goalies: {col: 10, dir: -1} };
 async function loadStandings() {
   try {
     const { cols, rows } = await fetchTab("Standings");
-    const idx = {};
-    cols.forEach((c,i) => idx[c] = i);
-
-    // Group rows by division parsing the data
-    // Standings tab has: Team, GP, W, L, OTL, PTS
-    // Parse all team rows (skip division headers)
+    // CSV: rows[0] = header, rows[1:] = data
+    const dataRows = rows.slice(1);
     const teamData = {};
-    rows.forEach(r => {
+    dataRows.forEach(r => {
       const team = String(r[0] || "").trim();
       if (!team || team === "TEAM" || !r[1]) return;
       teamData[team] = {
@@ -566,7 +563,9 @@ function posShort(pos) {
 
 async function loadPlayers() {
   try {
-    playerData = await fetchTab("Player Stats");
+    const raw = await fetchTab("Player Stats");
+    // CSV: skip header row, store just data rows but keep cols for headers
+    playerData = { cols: raw.rows[0] || [], rows: raw.rows.slice(1), numCols: raw.numCols };
     const teams = [...new Set(playerData.rows.map(r => String(r[2]||"")).filter(Boolean))].sort();
     const sel = document.getElementById("team-filter");
     teams.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o); });
@@ -582,7 +581,8 @@ function renderPlayers() {
   const search = document.getElementById("player-search").value.toLowerCase();
   const posFil = document.getElementById("pos-filter").value;
   const teamFil = document.getElementById("team-filter").value;
-  const { cols, rows } = playerData;
+  const cols = playerData.cols;
+  const rows = playerData.rows;
   if (!cols.length) return;
 
   let filtered = rows.filter(r => {
@@ -607,10 +607,12 @@ function renderPlayers() {
   // Re-rank after filter/sort
   document.getElementById("player-count").textContent = `${filtered.length} players`;
 
-  // Advanced stat columns (last 4)
-  const advStart = cols.length - 4;
+  // cols[0] = "#", cols[1] = "Username", etc.
+  // data rows also start with rank number in col 0
+  const hdrs = playerData.cols;
+  const advStart = hdrs.length - 4; // last 4 are EV Sh%, EVO, GAR, WAR
 
-  const headers = cols.slice(1).map((c, i) => {
+  const headers = hdrs.slice(1).map((c, i) => {
     const colIdx = i + 1;
     const ss = sortState.players;
     const cls = ss.col === colIdx ? (ss.dir === 1 ? "sorted-asc" : "sorted-desc") : "";
@@ -620,11 +622,11 @@ function renderPlayers() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = r.slice(1).map((v, i) => {
       const colIdx = i + 1;
-      if (colIdx === 1) return `<td class="player-name">${v}</td>`;
-      if (colIdx === 2) return `<td><span class="team-badge">${v}</span></td>`;
+      if (colIdx === 1) return `<td class="player-name">${v || "-"}</td>`;
+      if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
       if (colIdx === 3) return `<td><span class="pos-badge">${posShort(v)}</span></td>`;
-      if (colIdx === 7) return `<td class="pts-cell">${v}</td>`; // PTS
-      if (colIdx >= advStart) return `<td class="adv-cell">${v}</td>`;
+      if (colIdx === 7) return `<td class="pts-cell">${v || "-"}</td>`;
+      if (colIdx >= advStart) return `<td class="adv-cell">${v || "-"}</td>`;
       return `<td>${v !== null && v !== "" ? v : "-"}</td>`;
     });
     return `<tr><td class="rank-cell">${rank+1}</td>${cells.join("")}</tr>`;
@@ -642,7 +644,8 @@ let goalieData = { cols: [], rows: [] };
 
 async function loadGoalies() {
   try {
-    goalieData = await fetchTab("Goalie Stats");
+    const rawG = await fetchTab("Goalie Stats");
+    goalieData = { cols: rawG.rows[0] || [], rows: rawG.rows.slice(1), numCols: rawG.numCols };
     renderGoalies();
   } catch(e) {
     document.getElementById("goalie-table-wrap").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
@@ -653,7 +656,8 @@ function filterGoalies() { renderGoalies(); }
 
 function renderGoalies() {
   const search = document.getElementById("goalie-search").value.toLowerCase();
-  const { cols, rows } = goalieData;
+  const cols = goalieData.cols;
+  const rows = goalieData.rows;
   if (!cols.length) return;
 
   let filtered = rows.filter(r => {
@@ -671,7 +675,8 @@ function renderGoalies() {
 
   document.getElementById("goalie-count").textContent = `${filtered.length} goalies`;
 
-  const headers = cols.slice(1).map((c, i) => {
+  const gHdrs = goalieData.cols;
+  const headers = gHdrs.slice(1).map((c, i) => {
     const colIdx = i + 1;
     const ss = sortState.goalies;
     const cls = ss.col === colIdx ? (ss.dir === 1 ? "sorted-asc" : "sorted-desc") : "";
@@ -681,9 +686,9 @@ function renderGoalies() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = r.slice(1).map((v, i) => {
       const colIdx = i + 1;
-      if (colIdx === 1) return `<td class="player-name">${v}</td>`;
-      if (colIdx === 2) return `<td><span class="team-badge">${v}</span></td>`;
-      if (colIdx === 10) return `<td class="pts-cell">${v}</td>`; // SV%
+      if (colIdx === 1) return `<td class="player-name">${v || "-"}</td>`;
+      if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
+      if (colIdx === 10) return `<td class="pts-cell">${v || "-"}</td>`;
       return `<td>${v !== null && v !== "" ? v : "-"}</td>`;
     });
     return `<tr><td class="rank-cell">${rank+1}</td>${cells.join("")}</tr>`;
@@ -724,98 +729,75 @@ async function showTeam(abbr, btn) {
   activeTeam = abbr;
 
   if (teamCache[abbr]) {
-    renderTeam(abbr, teamCache[abbr]);
+    renderTeamFromMaster(abbr, teamCache[abbr]);
     return;
   }
 
   document.getElementById("team-content").innerHTML = `<div class="loading"><div class="spinner"></div>Loading ${abbr}...</div>`;
 
   try {
-    const data = await fetchTab(abbr);
-    teamCache[abbr] = data;
-    renderTeam(abbr, data);
+    // Filter from master player/goalie data instead of team-specific tab
+    // This avoids gviz issues with merged cells on team tabs
+    await ensureMasterDataLoaded();
+    teamCache[abbr] = { sk: playerData, gl: goalieData };
+    renderTeamFromMaster(abbr, teamCache[abbr]);
   } catch(e) {
-    document.getElementById("team-content").innerHTML = `<div class="loading">Error loading ${abbr}: ${e.message}</div>`;
+    document.getElementById("team-content").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
   }
 }
 
-function renderTeam(abbr, { cols, rows, numCols }) {
+async function ensureMasterDataLoaded() {
+  // Load player/goalie data if not already loaded
+  if (!playerData.cols.length) await loadPlayers();
+  if (!goalieData.cols.length) await loadGoalies();
+}
+
+function renderTeamFromMaster(abbr, { sk, gl }) {
   const team = TEAMS.find(t => t.abbr === abbr);
   const teamName = team ? team.name.toUpperCase() : abbr;
 
-  // Debug: log all rows to console so we can see structure
-  console.log("=== " + abbr + " TAB ROWS ===");
-  rows.forEach((r, i) => console.log(i, JSON.stringify(r.slice(0,5))));
+  // Filter skater rows by team abbreviation (col index 2 = Team)
+  const skHeaders = sk.cols;
+  const glHeaders = gl.cols;
 
-  // Strategy: scan every row and classify it
-  // - Banner row: first cell contains team name (all caps, no stats)
-  // - Section label: first cell contains "SKATER" or "GOALIE"
-  // - Header row: first cell === "Username"
-  // - Data row: first cell is a player name (non-empty, not a label)
-  // - Total row: first cell === "TOTAL"
-  // - Blank row: all cells empty
+  const skRows = sk.rows.filter(r => String(r[2]||"").trim() === abbr);
+  const glRows = gl.rows.filter(r => String(r[2]||"").trim() === abbr);
 
-  let skHdrIdx = -1, glHdrIdx = -1;
-  let totalRowData = null;
-  const skRows = [], glRows = [];
-  let phase = "pre"; // pre, skaters, goalies
+  // Find PTS and SV% column indices
+  const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
+  const svIdx  = glHeaders.findIndex(h => String(h).trim() === "Save %");
 
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const first = String(r[0] || "").trim();
-    const isBlank = r.every(c => !String(c||"").trim());
+  // Sort skaters by PTS desc
+  skRows.sort((a,b) => (parseFloat(b[ptsIdx]||0) - parseFloat(a[ptsIdx]||0)));
 
-    if (isBlank) continue;
-
-    // Section labels
-    if (first.includes("SKATER") || first.includes("skater") || first.includes("─")) continue;
-    if (first.includes("GOALIE") || first.includes("goalie")) { phase = "goalies"; continue; }
-
-    // Header rows (Username)
-    if (first === "Username") {
-      if (skHdrIdx === -1) { skHdrIdx = i; phase = "skaters"; }
-      else if (glHdrIdx === -1) { glHdrIdx = i; phase = "goalies"; }
-      continue;
-    }
-
-    // Total row
-    if (first === "TOTAL") { totalRowData = r; continue; }
-
-    // Team banner (first row, usually team name in caps or mixed case)
-    // Skip rows before skater header
-    if (skHdrIdx === -1) continue;
-
-    // Data rows
-    if (phase === "skaters" && skHdrIdx !== -1) skRows.push(r);
-    else if (phase === "goalies" && glHdrIdx !== -1) glRows.push(r);
-    else if (phase === "goalies" && glHdrIdx === -1) glRows.push(r);
+  // Build totals row for skaters
+  const sumCols = [4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40];
+  const totals = new Array(skHeaders.length).fill("");
+  totals[0] = "TOTAL";
+  if (skRows.length) {
+    sumCols.forEach(ci => {
+      if (ci < skHeaders.length) {
+        const sum = skRows.reduce((acc, r) => acc + (parseFloat(r[ci]||0)||0), 0);
+        // Only show integer sums for counting stats
+        totals[ci] = Number.isInteger(sum) || sum === Math.round(sum) ? Math.round(sum) : sum.toFixed(2);
+      }
+    });
+    // GP = number of rows
+    totals[3] = skRows.reduce((acc,r) => acc + (parseInt(r[3])||0), 0);
   }
-
-  console.log("skHdrIdx:", skHdrIdx, "glHdrIdx:", glHdrIdx);
-  console.log("skRows:", skRows.length, "glRows:", glRows.length);
-  console.log("skHeaders:", rows[skHdrIdx]);
-
-  if (skHdrIdx === -1) {
-    document.getElementById("team-content").innerHTML =
-      `<div class="loading">No data for ${abbr} yet. Check that stats_publisher.py has run.</div>`;
-    return;
-  }
-
-  const skHeaders = rows[skHdrIdx];
-  const glHeaders = glHdrIdx !== -1 ? rows[glHdrIdx] : [];
 
   function makeTable(headers, dataRows, highlightCol, totalRow) {
-    // Find last non-empty header to trim trailing empty cols
+    // Trim to last non-empty header
     let lastCol = 0;
-    headers.forEach((h, i) => { if (String(h||"").trim()) lastCol = i; });
-    const useCols = Math.min(lastCol + 1, headers.length);
+    headers.forEach((h,i) => { if (String(h||"").trim()) lastCol = i; });
+    const useCols = lastCol + 1;
 
-    const hdr = headers.slice(0, useCols).map((h, i) =>
+    const hdr = headers.slice(0, useCols).map((h,i) =>
       `<th onclick="sortTeamTable(this,${i})" style="cursor:pointer;white-space:nowrap">${String(h||"").trim()}</th>`
     ).join("");
 
     const body = dataRows.map(r =>
-      `<tr>${r.slice(0, useCols).map((v, i) => {
+      `<tr>${r.slice(0, useCols).map((v,i) => {
         const val = String(v||"").trim() || "-";
         if (i === 0) return `<td class="player-name">${val}</td>`;
         if (i === highlightCol) return `<td class="pts-cell">${val}</td>`;
@@ -824,23 +806,21 @@ function renderTeam(abbr, { cols, rows, numCols }) {
     ).join("");
 
     const tot = totalRow
-      ? `<tr class="totals-row">${totalRow.slice(0, useCols).map(v =>
+      ? `<tr class="totals-row">${totalRow.slice(0,useCols).map(v =>
           `<td>${String(v||"").trim()}</td>`).join("")}</tr>`
       : "";
 
-    if (!body) return "<p style='padding:16px;color:#888'>No data rows found</p>";
-    return `<table><thead><tr>${hdr}</tr></thead><tbody>${body}${tot}</tbody></table>`;
+    return body
+      ? `<table><thead><tr>${hdr}</tr></thead><tbody>${body}${tot}</tbody></table>`
+      : `<p style="padding:16px;color:#888">No data yet for this team.</p>`;
   }
-
-  const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
-  const svIdx  = glHeaders.findIndex(h => String(h).trim() === "Save %");
 
   document.getElementById("team-content").innerHTML = `
     <div style="background:#fff;border-radius:8px;box-shadow:0 2px 16px rgba(0,0,0,0.08);overflow:hidden;margin-bottom:24px;">
       <div class="team-banner">${teamName}</div>
       <div class="subsection-label">Skaters</div>
       <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
-        ${makeTable(skHeaders, skRows, ptsIdx, totalRowData)}
+        ${makeTable(skHeaders, skRows, ptsIdx, skRows.length ? totals : null)}
       </div>
       ${glHeaders.length ? `
         <div class="subsection-label" style="margin-top:2px;">Goalies</div>
@@ -849,6 +829,7 @@ function renderTeam(abbr, { cols, rows, numCols }) {
         </div>` : ""}
     </div>`;
 }
+
 
 function sortTeamTable(th, colIdx) {
   const table = th.closest("table");
