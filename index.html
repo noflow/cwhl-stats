@@ -460,6 +460,8 @@
     cursor: pointer;
     border: 1.5px solid transparent;
     transition: border-color 0.15s, box-shadow 0.15s;
+    max-width: 100%;
+    overflow: hidden;
   }
   .game-card:hover { border-color: var(--teal); box-shadow: 0 4px 20px rgba(26,82,118,0.15); }
   .game-date {
@@ -474,6 +476,7 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
+    min-width: 0;
   }
   .game-team {
     display: flex;
@@ -481,6 +484,7 @@
     align-items: center;
     gap: 4px;
     min-width: 140px;
+    max-width: 100%;
   }
   .game-team-name {
     font-family: 'Barlow Condensed', sans-serif;
@@ -489,6 +493,9 @@
     color: var(--black);
     text-align: center;
     letter-spacing: 0.3px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    line-height: 1.1;
   }
   .game-team-name.winner { color: var(--teal); }
   .game-score-wrap {
@@ -533,6 +540,59 @@
     color: var(--grey3);
     font-size: 18px;
     margin-left: 12px;
+  }
+  .game-card-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  @media (max-width: 640px) {
+    main { padding: 14px 10px; }
+    .game-card {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 12px;
+    }
+    .game-card .game-date {
+      min-width: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 13px;
+    }
+    .game-teams {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 8px;
+      width: 100%;
+    }
+    .game-team {
+      min-width: 0;
+      width: 100%;
+    }
+    .game-team-name {
+      font-size: 13px;
+    }
+    .game-score-wrap {
+      gap: 6px;
+      align-self: center;
+    }
+    .game-score {
+      font-size: 30px;
+      min-width: 24px;
+    }
+    .game-sep {
+      font-size: 16px;
+    }
+    .game-card-actions {
+      justify-content: center;
+      width: 100%;
+    }
+    .game-arrow {
+      display: none;
+    }
   }
 
   /* ── BOX SCORE MODAL ── */
@@ -1029,8 +1089,8 @@ function renderPlayers() {
   const hdrs = playerData.cols;
 
   // Columns hidden from main table — only shown on player card
-  // Hidden: W, L, T (card Record section), EV Sh%, EVO, GAR, WAR (card Advanced section)
-  const HIDDEN_MAIN = new Set(["W","L","T","EV Sh%","EVO","GAR","WAR"]);
+  // Hidden: W, L, OTL (card Record section), EV Sh%, EVO, GAR, WAR (card Advanced section)
+  const HIDDEN_MAIN = new Set(["W","L","OTL","EV Sh%","EVO","GAR","WAR"]);
 
   // PTS column index for highlighting (changes if W/L/T added before it)
   const ptsColIdx = hdrs.findIndex(h => h.trim() === "PTS");
@@ -1570,7 +1630,7 @@ function renderGames() {
           <div class="game-badge">${t2wins?'<span class="badge">W</span>':''}</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div class="game-card-actions">
         ${badges}
         <span class="game-arrow">&#8250;</span>
       </div>
@@ -1734,7 +1794,7 @@ function closeBoxModal(e) {
 // Skater stat sections for the card layout
 const SK_CARD_SECTIONS = [
   { title: "Record",
-    cols: ["GP","W","L","T"], highlight: ["W"] },
+    cols: ["GP","W","L","OTL"], highlight: ["W"] },
   { title: "Scoring",
     cols: ["G","A","PTS","Pts/GP","G/GP","A/GP","PPG","SHG","ES Goals","GWGs"], highlight: ["PTS","G","A"] },
   { title: "Shooting",
@@ -1751,7 +1811,7 @@ const SK_CARD_SECTIONS = [
 
 const GL_CARD_SECTIONS = [
   { title: "Record",
-    cols: ["GP","W","L"], highlight: ["W"] },
+    cols: ["GP","W","L","OTL"], highlight: ["W"] },
   { title: "Goals",
     cols: ["Goals Against","GAA","Saves","Shots Against","Save %"], highlight: ["Save %","GAA"] },
   { title: "Special Saves",
