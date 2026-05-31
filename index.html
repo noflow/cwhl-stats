@@ -255,6 +255,7 @@
     text-transform: uppercase;
   }
   .division-title span { color: var(--gold); margin-right: 6px; }
+  .stand-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .stand-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .stand-table thead tr { background: var(--teal2); color: #fff; }
   .stand-table thead th {
@@ -270,6 +271,7 @@
   .stand-table tbody tr:nth-child(even) { background: var(--grey1); }
   .stand-table tbody td { padding: 8px 10px; text-align: center; color: var(--black); }
   .stand-table tbody td:first-child { text-align: left; padding-left: 14px; font-weight: 600; }
+  .stand-table th, .stand-table td { box-sizing: border-box; }
   .stand-team-link {
     border: none;
     background: transparent;
@@ -285,6 +287,7 @@
     text-decoration: underline;
     text-underline-offset: 3px;
   }
+  .stand-team-abbr { display: none; }
   .pts-bold { font-weight: 700; color: var(--teal); }
 
   /* ── TEAM TABS ── */
@@ -600,6 +603,48 @@
 
   @media (max-width: 640px) {
     main { padding: 14px 10px; }
+    .standings-grid {
+      gap: 14px;
+    }
+    .division-title {
+      font-size: 16px;
+      padding: 9px 10px;
+    }
+    .stand-table {
+      table-layout: fixed;
+      font-size: 12px;
+    }
+    .stand-table thead th {
+      padding: 6px 2px;
+      font-size: 10px;
+      letter-spacing: 0;
+    }
+    .stand-table tbody td {
+      padding: 7px 2px;
+    }
+    .stand-table thead th:first-child,
+    .stand-table tbody td:first-child {
+      width: 24%;
+      padding-left: 7px;
+      padding-right: 2px;
+    }
+    .stand-table thead th:not(:first-child),
+    .stand-table tbody td:not(:first-child) {
+      width: 10.85%;
+    }
+    .stand-team-link {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .stand-team-full {
+      display: none;
+    }
+    .stand-team-abbr {
+      display: inline;
+    }
     .game-card {
       display: grid;
       grid-template-columns: 1fr;
@@ -1247,19 +1292,21 @@ async function loadStandings() {
       html += `
         <div class="division-block">
           <div class="division-title"><span>&#9670;</span>${divName}</div>
-          <table class="stand-table">
-            <thead><tr>
-              <th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th>
-            </tr></thead>
-            <tbody>
-              ${divTeams.map((t,i) => `
-                <tr>
-                  <td><button class="stand-team-link" onclick="openTeamRoster('${t.abbr}')">${t.name}</button></td>
-                  <td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${t.otl}</td>
-                  <td class="pts-bold">${t.pts}</td><td>${t.gf}</td><td>${t.ga}</td>
-                </tr>`).join("")}
-            </tbody>
-          </table>
+          <div class="stand-table-wrap">
+            <table class="stand-table">
+              <thead><tr>
+                <th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th>
+              </tr></thead>
+              <tbody>
+                ${divTeams.map((t,i) => `
+                  <tr>
+                    <td><button class="stand-team-link" onclick="openTeamRoster('${t.abbr}')"><span class="stand-team-full">${t.name}</span><span class="stand-team-abbr">${t.abbr}</span></button></td>
+                    <td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${t.otl}</td>
+                    <td class="pts-bold">${t.pts}</td><td>${t.gf}</td><td>${t.ga}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
         </div>`;
     }
     document.getElementById("standings-grid").innerHTML = html;
