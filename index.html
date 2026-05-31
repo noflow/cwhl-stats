@@ -688,6 +688,7 @@
   }
   .badge.ot   { background: #fef9f0; color: var(--gold); }
   .badge.lgot { background: #fdf2f2; color: var(--accent); }
+  .badge.forfeit { background: #111; color: #fff; }
   .game-arrow {
     color: var(--grey3);
     font-size: 18px;
@@ -2526,6 +2527,7 @@ function renderGames() {
   }
 
   function gameCard(r, gameIdx) {
+    const matchId = String(r[glIdx["Match ID"]]||"").trim();
     const fullDate = String(r[glIdx["Date"]]||"").trim();
     const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
     const t1    = displayTeamName(r[glIdx["Team 1"]]);
@@ -2537,12 +2539,14 @@ function renderGames() {
     const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
     const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
     const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
+    const forfeit = matchId.toUpperCase().startsWith("FORFEIT_");
     const t1wins = r1 === "Win";
     const t2wins = r2 === "Win";
 
     let badges = "";
     if (ot)          badges += `<span class="badge ot">OT</span>`;
-    if (lagout)      badges += `<span class="badge lgot">LAGOUT</span>`;
+    if (forfeit)     badges += `<span class="badge forfeit">FORFEIT</span>`;
+    else if (lagout) badges += `<span class="badge lgot">LAGOUT</span>`;
     else if (early)  badges += `<span class="badge lgot">MERCY</span>`;
 
     return `<div class="game-card" onclick="openBoxScore(${gameIdx})">
@@ -2603,6 +2607,7 @@ function formatGameDateHeader(d) {
 }
 
 function gameCardHtml(r, gameIdx, glIdx, source) {
+  const matchId = String(r[glIdx["Match ID"]]||"").trim();
   const fullDate = String(r[glIdx["Date"]]||"").trim();
   const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
   const t1    = displayTeamName(r[glIdx["Team 1"]]);
@@ -2614,12 +2619,14 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
   const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
   const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
   const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
+  const forfeit = matchId.toUpperCase().startsWith("FORFEIT_");
   const t1wins = r1 === "Win";
   const t2wins = r2 === "Win";
 
   let badges = "";
   if (ot)          badges += `<span class="badge ot">OT</span>`;
-  if (lagout)      badges += `<span class="badge lgot">LAGOUT</span>`;
+  if (forfeit)     badges += `<span class="badge forfeit">FORFEIT</span>`;
+  else if (lagout) badges += `<span class="badge lgot">LAGOUT</span>`;
   else if (early)  badges += `<span class="badge lgot">MERCY</span>`;
 
   const click = source ? `openBoxScore(${gameIdx}, '${source}')` : `openBoxScore(${gameIdx})`;
