@@ -81,6 +81,22 @@
   }
   nav button:hover { background: rgba(255,255,255,0.1); color: #fff; }
   nav button.active { background: rgba(255,255,255,0.18); color: #fff; }
+  .mobile-menu-toggle {
+    display: none;
+    margin-left: auto;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.32);
+    color: #fff;
+    border-radius: 5px;
+    width: 38px;
+    height: 34px;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+  }
+  .mobile-menu-toggle:hover { background: rgba(255,255,255,0.2); }
 
   /* ── MAIN ── */
   main { padding: 24px; max-width: 1600px; margin: 0 auto; padding-top: 20px; }
@@ -648,6 +664,52 @@
   }
 
   @media (max-width: 640px) {
+    header {
+      height: 58px;
+      padding: 0 12px;
+      gap: 10px;
+    }
+    .logo {
+      font-size: 22px;
+    }
+    .league-logo {
+      width: 26px;
+      height: 26px;
+    }
+    .mobile-menu-toggle {
+      display: inline-flex;
+    }
+    nav {
+      display: none;
+      position: absolute;
+      top: 58px;
+      left: 0;
+      right: 0;
+      background: var(--teal);
+      border-top: 1px solid rgba(255,255,255,0.18);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.26);
+      padding: 8px 10px 10px;
+      flex-direction: column;
+      gap: 4px;
+      overflow-x: visible;
+    }
+    header.menu-open nav {
+      display: flex;
+    }
+    nav button {
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 17px;
+      border-radius: 5px;
+    }
+    nav button.active {
+      background: rgba(255,255,255,0.22);
+      color: #fff;
+    }
+    .controls {
+      top: 58px;
+    }
     main { padding: 14px 10px; }
     .standings-grid {
       gap: 14px;
@@ -987,6 +1049,7 @@
 
 <header>
   <div class="logo"><img class="league-logo" src="images/NHL%20Logo.png" alt="">CWHL <span>NHL</span></div>
+  <button class="mobile-menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" onclick="toggleMobileMenu(event)">&#9776;</button>
   <nav id="main-nav">
     <button class="active" onclick="showPage('standings', this)">Standings</button>
     <button onclick="showPage('players', this)">Player Stats</button>
@@ -2891,6 +2954,36 @@ function closeModal(e) {
 
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePlayerModal(); });
 
+function setMobileMenuOpen(open) {
+  const header = document.querySelector("header");
+  const btn = document.querySelector(".mobile-menu-toggle");
+  if (!header || !btn) return;
+  header.classList.toggle("menu-open", open);
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+}
+
+function toggleMobileMenu(event) {
+  if (event) event.stopPropagation();
+  const header = document.querySelector("header");
+  setMobileMenuOpen(!header?.classList.contains("menu-open"));
+}
+
+document.addEventListener("click", e => {
+  const header = document.querySelector("header");
+  if (header?.classList.contains("menu-open") && !header.contains(e.target)) {
+    setMobileMenuOpen(false);
+  }
+});
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 640) setMobileMenuOpen(false);
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") setMobileMenuOpen(false);
+});
+
 // Make a player-name cell clickable
 function makeClickable(name, rowData, headers, isGoalie) {
   return `<td class="player-name clickable" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie})'>${name}</td>`;
@@ -2906,6 +2999,7 @@ refreshBracketVisibility();
 const _origShowPage = showPage;
 window.showPage = function(id, btn) {
   _origShowPage(id, btn);
+  setMobileMenuOpen(false);
   if (id === 'schedule' && !scheduleData.cols.length) loadSchedule();
   if (id === 'bracket' && !playoffBracketLoaded) loadPlayoffBracket();
   if (id === 'games' && !gameLogData.cols.length) loadGames();
