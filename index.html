@@ -504,6 +504,43 @@
   .player-card-panel { display: none; }
   .player-card-panel.active { display: block; }
   .player-games-list .date-group { margin-bottom: 18px; }
+  .player-team-splits {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: -4px 0 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--grey2);
+  }
+  .player-split-btn {
+    border: 1px solid var(--grey2);
+    background: var(--ice);
+    color: var(--teal);
+    border-radius: 7px;
+    padding: 6px 10px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .player-split-btn.active {
+    background: var(--teal3);
+    border-color: var(--teal);
+    box-shadow: inset 0 0 0 1px rgba(26,82,118,0.12);
+  }
+  .player-split-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex: 0 0 auto;
+  }
   .stat-section-title {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 13px;
@@ -1083,7 +1120,9 @@
       <select class="pos-filter" id="pos-filter" onchange="filterPlayers()">
         <option value="">All</option>
         <option value="C">Center</option>
-        <option value="W">Wing</option>
+        <option value="LW">Left Wing</option>
+        <option value="RW">Right Wing</option>
+        <option value="W">All Wings</option>
         <option value="D">Defense</option>
       </select>
       <span class="filter-label">Team:</span>
@@ -1447,7 +1486,12 @@ function posGroup(pos) {
 function posShort(pos) {
   const g = posGroup(pos);
   if (g === "C") return "C";
-  if (g === "W") return pos.toLowerCase().includes("left") ? "LW" : "RW";
+  if (g === "W") {
+    const p = String(pos).toLowerCase();
+    if (p.includes("left") || p.includes("lw")) return "LW";
+    if (p.includes("right") || p.includes("rw")) return "RW";
+    return "W";
+  }
   if (g === "D") return "D";
   return pos;
 }
@@ -1472,19 +1516,26 @@ async function loadPlayers() {
 function filterPlayers() { renderPlayers(); }
 
 function renderPlayers() {
-  const search = document.getElementById("player-search").value.toLowerCase();
+  const search = document.getElementById("player-search").value.trim().toLowerCase();
   const posFil = document.getElementById("pos-filter").value;
   const teamFil = document.getElementById("team-filter").value;
   const cols = playerData.cols;
   const rows = playerData.rows;
   if (!cols.length) return;
+  const idx = getIndexMap(cols);
+  const nameIdx = idx["Username"] ?? 1;
+  const teamIdx = idx["Team"] ?? 2;
+  const posIdx = idx["Position"] ?? 4;
 
   let filtered = rows.filter(r => {
-    const name = String(r[1]||"").toLowerCase();
-    const pos  = String(r[3]||"");
-    const team = String(r[2]||"");
-    if (search && !name.includes(search)) return false;
-    if (posFil && posGroup(pos) !== posFil) return false;
+    const name = String(r[nameIdx]||"").toLowerCase();
+    const pos  = String(r[posIdx]||"");
+    const team = String(r[teamIdx]||"");
+    const shortPos = posShort(pos).toLowerCase();
+    const rawPos = pos.toLowerCase();
+    if (search && !name.includes(search) && !rawPos.includes(search) && shortPos !== search) return false;
+    if (posFil && posFil.length > 1 && posShort(pos) !== posFil) return false;
+    if (posFil && posFil.length === 1 && posGroup(pos) !== posFil) return false;
     if (teamFil && team !== teamFil) return false;
     return true;
   });
@@ -1527,9 +1578,10 @@ function renderPlayers() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = displayColIdxs.map(origIdx => {
       const v = String(r[origIdx] || "").trim() || "-";
-      if (origIdx === 1) return makeClickable(r[origIdx] || "-", r, playerData.cols, false);
-      if (origIdx === 2) return `<td><span class="team-badge">${v}</span></td>`;
-      if (origIdx === 3) return `<td><span class="pos-badge">${posShort(r[origIdx])}</span></td>`;
+      const colName = String(hdrs[origIdx] || "").trim();
+      if (colName === "Username") return makeClickable(r[origIdx] || "-", r, playerData.cols, false);
+      if (colName === "Team") return `<td><span class="team-badge">${v}</span></td>`;
+      if (colName === "Position") return `<td><span class="pos-badge">${posShort(r[origIdx])}</span></td>`;
       if (origIdx === ptsColIdx) return `<td class="pts-cell">${v}</td>`;
       return `<td>${v}</td>`;
     });
@@ -2258,7 +2310,7 @@ function nameToAbbr(name) {
   for (const [abbr, kws] of Object.entries(ABBR_TO_KEYWORDS)) {
     if (kws.some(kw => n.includes(kw))) return abbr;
   }
-  return name.slice(0,3).toUpperCase();
+  return String(name||"").slice(0,3).toUpperCase();
 }
 
 function abbrToDisplay(abbr) {
@@ -2824,6 +2876,10 @@ function statsFromRow(rowData, headers) {
   return stats;
 }
 
+function statGpValue(stats) {
+  return parseStatNumber(stats && stats["GP"]);
+}
+
 function teamsMatchForCard(rowTeam, wantedTeam) {
   const row = String(rowTeam||"").trim();
   const wanted = String(wantedTeam||"").trim();
@@ -2832,36 +2888,116 @@ function teamsMatchForCard(rowTeam, wantedTeam) {
   return nameToAbbr(row) === wanted.toUpperCase();
 }
 
-function findCardStats(playerName, wantedTeam, isGoalie, fallbackStats) {
+function findPlayerRoleRows(playerName, isGoalie) {
   const data = isGoalie ? goalieData : playerData;
-  if (!data.cols.length) return fallbackStats || null;
+  if (!data.cols.length) return { rows: [], headers: [] };
 
   const idx = getIndexMap(data.cols);
   const nameIdx = idx["Username"];
-  const teamIdx = idx["Team"];
   const wantedName = String(playerName||"").trim().toLowerCase();
-
-  const nameMatches = data.rows.filter(r =>
+  const rows = data.rows.filter(r =>
     String(r[nameIdx]||"").trim().toLowerCase() === wantedName
   );
-  const teamMatch = nameMatches.find(r => teamsMatchForCard(r[teamIdx], wantedTeam));
-  const row = teamMatch || nameMatches[0];
-  return row ? statsFromRow(row, data.cols) : (fallbackStats || null);
+  return { rows, headers: data.cols };
+}
+
+function buildPlayerStatSplits(playerName, clickedStats, clickedIsRole, isGoalie) {
+  const { rows, headers } = findPlayerRoleRows(playerName, isGoalie);
+  const idx = getIndexMap(headers);
+  const teamIdx = idx["Team"];
+  const clickedTeam = nameToAbbr(clickedStats && clickedStats["Team"]);
+  const splits = [];
+  const seenTeams = new Set();
+
+  if (rows.length > 1 && headers.length) {
+    const totalTeam = clickedTeam || nameToAbbr(rows[rows.length - 1][teamIdx]);
+    const totalStats = statsFromRow(aggregatePlayerRows(rows, headers, totalTeam, isGoalie), headers);
+    splits.push({ key: "total", label: "Total", abbr: totalTeam, stats: totalStats, total: true });
+  }
+
+  rows.forEach(r => {
+    const abbr = nameToAbbr(r[teamIdx]);
+    if (!abbr || seenTeams.has(abbr)) return;
+    seenTeams.add(abbr);
+    splits.push({ key: abbr, label: abbr, abbr, stats: statsFromRow(r, headers), total: false });
+  });
+
+  if (!splits.length && clickedIsRole && clickedStats) {
+    const abbr = clickedTeam || nameToAbbr(clickedStats["Team"]);
+    splits.push({ key: abbr || "current", label: abbr || "Stats", abbr, stats: clickedStats, total: false });
+  }
+
+  if (clickedIsRole && clickedStats && rows.length) {
+    const clickedGp = statGpValue(clickedStats);
+    const clickedTeamSplit = splits.find(s => !s.total && teamsMatchForCard(s.abbr, clickedTeam));
+    const teamGp = clickedTeamSplit ? statGpValue(clickedTeamSplit.stats) : 0;
+    const totalSplit = splits.find(s => s.total);
+    if (totalSplit && clickedGp > teamGp) {
+      totalSplit.stats = clickedStats;
+    }
+  }
+
+  let activeKey = splits[0]?.key || "";
+  if (clickedIsRole && clickedStats) {
+    const clickedGp = statGpValue(clickedStats);
+    const clickedTeamSplit = splits.find(s => !s.total && teamsMatchForCard(s.abbr, clickedTeam));
+    const totalSplit = splits.find(s => s.total);
+    activeKey = clickedTeamSplit?.key || activeKey;
+    if (totalSplit && clickedGp > statGpValue(clickedTeamSplit?.stats)) activeKey = totalSplit.key;
+  }
+
+  return { splits, activeKey };
+}
+
+function activePlayerSplit(role) {
+  const state = window._activePlayerCard?.roleSplits?.[role];
+  if (!state) return null;
+  return state.splits.find(s => s.key === state.activeKey) || state.splits[0] || null;
+}
+
+function renderPlayerSplitControls(role) {
+  const state = window._activePlayerCard?.roleSplits?.[role];
+  if (!state || state.splits.length <= 1) return "";
+  return `<div class="player-team-splits">
+    ${state.splits.map(split => `
+      <button class="player-split-btn ${split.key === state.activeKey ? "active" : ""}" onclick="setPlayerStatSplit('${role}', '${split.key}')">
+        ${split.total ? "" : teamLogoImg(split.abbr, "player-split-logo", split.label)}
+        <span>${split.label}</span>
+      </button>`).join("")}
+  </div>`;
+}
+
+function renderPlayerRolePanel(role) {
+  const split = activePlayerSplit(role);
+  if (!split) return "";
+  return renderPlayerSplitControls(role) + renderPlayerStatSections(split.stats, role === "goalie");
+}
+
+function setPlayerStatSplit(role, key) {
+  const card = window._activePlayerCard;
+  const state = card?.roleSplits?.[role];
+  if (!state) return;
+  state.activeKey = key;
+  const panel = document.getElementById(`player-card-${role}`);
+  if (panel) panel.innerHTML = renderPlayerRolePanel(role);
 }
 
 function openPlayerModal(playerName, rowData, headers, isGoalie) {
   const clickedStats = statsFromRow(rowData, headers);
   const clickedTeam = clickedStats["Team"] || "";
-  const skaterStats = findCardStats(playerName, clickedTeam, false, isGoalie ? null : clickedStats);
-  const goalieStats = findCardStats(playerName, clickedTeam, true, isGoalie ? clickedStats : null);
-  const activeRole = isGoalie && goalieStats ? "goalie" : (skaterStats ? "player" : "goalie");
-  const activeStats = activeRole === "goalie" ? goalieStats : skaterStats;
+  const playerSplits = buildPlayerStatSplits(playerName, clickedStats, !isGoalie, false);
+  const goalieSplits = buildPlayerStatSplits(playerName, clickedStats, isGoalie, true);
+  const activeRole = isGoalie && goalieSplits.splits.length ? "goalie" : (playerSplits.splits.length ? "player" : "goalie");
 
-  const team = (activeStats && activeStats["Team"]) || clickedTeam;
-  const pos  = activeRole === "goalie" ? "Goalie" : ((activeStats && activeStats["Position"]) || "");
-  const plat = (activeStats && activeStats["Platform"]) || clickedStats["Platform"] || "";
-
-  window._activePlayerCard = { playerName, team, skaterStats, goalieStats };
+  window._activePlayerCard = {
+    playerName,
+    team: "",
+    roleSplits: { player: playerSplits, goalie: goalieSplits }
+  };
+  const activeStats = activePlayerSplit(activeRole)?.stats || clickedStats;
+  const team = clickedTeam || activeStats["Team"] || "";
+  const pos  = activeRole === "goalie" ? "Goalie" : (activeStats["Position"] || "");
+  const plat = activeStats["Platform"] || clickedStats["Platform"] || "";
 
   document.getElementById("modal-name").textContent = playerName;
   document.getElementById("modal-meta").innerHTML = `
@@ -2870,16 +3006,16 @@ function openPlayerModal(playerName, rowData, headers, isGoalie) {
     <span>${plat.toUpperCase()}</span>`;
 
   const tabs = [];
-  if (skaterStats) tabs.push({ id: "player", label: "Player Stats" });
-  if (goalieStats) tabs.push({ id: "goalie", label: "Goalie Stats" });
+  if (playerSplits.splits.length) tabs.push({ id: "player", label: "Player Stats" });
+  if (goalieSplits.splits.length) tabs.push({ id: "goalie", label: "Goalie Stats" });
   tabs.push({ id: "games", label: "Recent Games" });
 
   document.getElementById("modal-body").innerHTML = `
     <div class="player-card-tabs">
       ${tabs.map(t => `<button class="player-card-tab ${t.id===activeRole?"active":""}" data-player-tab="${t.id}" onclick="showPlayerCardTab('${t.id}')">${t.label}</button>`).join("")}
     </div>
-    ${skaterStats ? `<div class="player-card-panel ${activeRole==="player"?"active":""}" id="player-card-player">${renderPlayerStatSections(skaterStats, false)}</div>` : ""}
-    ${goalieStats ? `<div class="player-card-panel ${activeRole==="goalie"?"active":""}" id="player-card-goalie">${renderPlayerStatSections(goalieStats, true)}</div>` : ""}
+    ${playerSplits.splits.length ? `<div class="player-card-panel ${activeRole==="player"?"active":""}" id="player-card-player">${renderPlayerRolePanel("player")}</div>` : ""}
+    ${goalieSplits.splits.length ? `<div class="player-card-panel ${activeRole==="goalie"?"active":""}" id="player-card-goalie">${renderPlayerRolePanel("goalie")}</div>` : ""}
     <div class="player-card-panel player-games-list" id="player-card-games">
       <div class="loading">Loading player games...</div>
     </div>`;
