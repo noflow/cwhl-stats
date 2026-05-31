@@ -755,6 +755,132 @@
     font-weight: 600;
     font-family: 'Barlow Condensed', sans-serif;
   }
+
+  /* PLAYOFF BRACKET */
+  .bracket-stage {
+    background: radial-gradient(circle at center, rgba(255,255,255,0.16), rgba(26,82,118,0.92));
+    border-radius: 8px;
+    padding: 22px;
+    color: #fff;
+    overflow-x: auto;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+  }
+  .bracket-hero {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+  .bracket-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    line-height: 1;
+    text-transform: uppercase;
+    text-shadow: 0 3px 8px rgba(0,0,0,0.35);
+  }
+  .bracket-subtitle {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 1px;
+    margin-top: 4px;
+    text-transform: uppercase;
+  }
+  .bracket-board {
+    display: grid;
+    grid-template-columns: minmax(560px, 1fr) minmax(220px, 0.42fr) minmax(560px, 1fr);
+    gap: 28px;
+    min-width: 1120px;
+    align-items: center;
+  }
+  .bracket-side {
+    display: flex;
+    gap: 18px;
+    align-items: stretch;
+  }
+  .bracket-side.west { flex-direction: row-reverse; }
+  .bracket-round {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 18px;
+  }
+  .bracket-round-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.72);
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .bracket-matchup {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 74px;
+    justify-content: center;
+  }
+  .bracket-team {
+    display: grid;
+    grid-template-columns: 28px 1fr 30px;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    background: rgba(0,0,0,0.52);
+    border: 1px solid rgba(255,255,255,0.55);
+    box-shadow: inset 0 0 18px rgba(255,255,255,0.08);
+    padding: 4px 7px;
+  }
+  .bracket-team.winner {
+    border-color: var(--gold);
+    background: rgba(243,156,18,0.22);
+  }
+  .bracket-seed {
+    color: rgba(255,255,255,0.72);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+  }
+  .bracket-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bracket-wins {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+    text-align: right;
+  }
+  .bracket-finals {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .bracket-finals-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .bracket-finals .bracket-matchup {
+    width: 100%;
+  }
+  @media (max-width: 760px) {
+    .bracket-stage { padding: 14px; }
+    .bracket-title { font-size: 34px; }
+    .bracket-board { min-width: 980px; gap: 18px; }
+  }
 </style>
 </head>
 <body>
@@ -766,6 +892,8 @@
     <button onclick="showPage('players', this)">Player Stats</button>
     <button onclick="showPage('goalies', this)">Goalie Stats</button>
     <button onclick="showPage('teams', this)">Teams</button>
+    <button onclick="showPage('schedule', this)">Schedule</button>
+    <button id="bracket-nav-btn" style="display:none" onclick="showPage('bracket', this)">Playoff Bracket</button>
     <button onclick="showPage('games', this)">Recent Games</button>
   </nav>
 </header>
@@ -830,6 +958,34 @@
     </div>
   </div>
 
+  <!-- SCHEDULE -->
+  <div class="page" id="page-schedule">
+    <div class="section-title">Schedule</div>
+    <div class="controls">
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter" id="schedule-type-filter" onchange="filterSchedule()">
+        <option value="Regular Season Schedule">Regular Season</option>
+        <option value="Playoff Schedule">Playoffs</option>
+      </select>
+      <span class="filter-label">Filter by team:</span>
+      <select class="pos-filter" id="schedule-team-filter" onchange="filterSchedule()">
+        <option value="">All Teams</option>
+      </select>
+      <span class="record-count" id="schedule-count"></span>
+    </div>
+    <div id="schedule-list">
+      <div class="loading"><div class="spinner"></div>Loading schedule...</div>
+    </div>
+  </div>
+
+  <!-- PLAYOFF BRACKET -->
+  <div class="page" id="page-bracket">
+    <div class="section-title">Playoff Bracket</div>
+    <div id="bracket-content">
+      <div class="loading"><div class="spinner"></div>Loading playoff bracket...</div>
+    </div>
+  </div>
+
 
   <!-- RECENT GAMES -->
   <div class="page" id="page-games">
@@ -855,6 +1011,7 @@
 // Your publish sheet ID — the one stats_publisher.py writes to
 const SHEET_ID        = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I"; // publish sheet
 const SOURCE_SHEET_ID = "1KfHr5l2ms5d6dfgaDDACZVNymolxJw5ZSNfGkSlwPxU"; // scraper sheet (Game/Skater/Goalie Log)
+const SCHEDULE_SHEET_ID = ""; // CWHL Schedule sheet created by Scheduler.py
 
 const DIVISIONS = {
   "East": ["TOR","OTT","MTL","CAR","CBJ"],
@@ -957,6 +1114,32 @@ async function fetchSourceTab(tabName) {
   const cols = allRows[0];   // row 0 = header
   const rows = allRows.slice(1).filter(r => r.some(c => String(c||"").trim() !== ""));
   return { cols, rows, numCols: cols.length };
+}
+
+async function fetchScheduleTab(tabName) {
+  if (!SCHEDULE_SHEET_ID) {
+    throw new Error("Schedule sheet ID has not been added to the website yet.");
+  }
+  const url = `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
+  const text = await res.text();
+  const allRows = parseCSV(text);
+  if (!allRows.length) return { cols: [], rows: [], numCols: 0 };
+  const cols = allRows[0];
+  const rows = allRows.slice(1).filter(r => r.some(c => String(c||"").trim() !== ""));
+  return { cols, rows, numCols: cols.length };
+}
+
+async function fetchScheduleSettings(tabName) {
+  const data = await fetchScheduleTab(tabName);
+  const settings = {};
+  data.rows.forEach(r => {
+    const key = String(r[0]||"").trim();
+    const val = String(r[1]||"").trim();
+    if (key) settings[key] = val;
+  });
+  return settings;
 }
 
 async function fetchSourceTabGviz(tabName) {
@@ -1610,6 +1793,228 @@ function sortTeamTable(th, colIdx) {
 
 
 // ── RECENT GAMES ──────────────────────────────────────────────────────────────
+// â”€â”€ SCHEDULE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let scheduleCache = {};
+let scheduleData = { cols: [], rows: [] };
+
+async function loadSchedule() {
+  const tabName = document.getElementById("schedule-type-filter").value || "Regular Season Schedule";
+  try {
+    if (!scheduleCache[tabName]) {
+      scheduleCache[tabName] = await fetchScheduleTab(tabName);
+    }
+    scheduleData = scheduleCache[tabName];
+    populateScheduleTeamFilter();
+    renderSchedule();
+  } catch(e) {
+    document.getElementById("schedule-list").innerHTML =
+      `<div class="loading">${e.message}<br><small>Run Scheduler.py setup/generate, then paste SCHEDULE_SHEET_ID into index.html.</small></div>`;
+  }
+}
+
+function populateScheduleTeamFilter() {
+  const idx = getIndexMap(scheduleData.cols);
+  const teams = new Set();
+  scheduleData.rows.forEach(r => {
+    teams.add(String(r[idx["Away"]]||"").trim());
+    teams.add(String(r[idx["Home"]]||"").trim());
+  });
+  const sel = document.getElementById("schedule-team-filter");
+  sel.innerHTML = `<option value="">All Teams</option>`;
+  [...teams].sort().forEach(t => {
+    if (!t) return;
+    const o = document.createElement("option");
+    o.value = t;
+    o.textContent = t;
+    sel.appendChild(o);
+  });
+}
+
+function filterSchedule() {
+  const tabName = document.getElementById("schedule-type-filter").value || "Regular Season Schedule";
+  if (!scheduleCache[tabName]) {
+    loadSchedule();
+    return;
+  }
+  scheduleData = scheduleCache[tabName];
+  populateScheduleTeamFilter();
+  renderSchedule();
+}
+
+function scheduleCardHtml(r, idx) {
+  const time = String(r[idx["Time"]]||"").trim();
+  const away = String(r[idx["Away"]]||"").trim();
+  const home = String(r[idx["Home"]]||"").trim();
+  const code = String(r[idx["Game Code"]]||"").trim();
+  const type = String(r[idx["Season Type"]]||"").trim();
+
+  return `<div class="game-card">
+    ${time ? `<div class="game-date">${time}</div>` : ""}
+    <div class="game-teams">
+      <div class="game-team">
+        <div class="game-team-name">${away}</div>
+        <div class="game-badge"><span class="badge">AWAY</span></div>
+      </div>
+      <div class="game-score-wrap">
+        <div class="game-sep">@</div>
+      </div>
+      <div class="game-team">
+        <div class="game-team-name">${home}</div>
+        <div class="game-badge"><span class="badge">HOME</span></div>
+      </div>
+    </div>
+    <div class="game-card-actions">
+      ${type ? `<span class="badge">${type}</span>` : ""}
+      ${code ? `<span class="badge lgot">${code}</span>` : ""}
+    </div>
+  </div>`;
+}
+
+function renderSchedule() {
+  const idx = getIndexMap(scheduleData.cols);
+  const teamFil = document.getElementById("schedule-team-filter").value;
+  let rows = [...scheduleData.rows];
+
+  if (teamFil) {
+    rows = rows.filter(r =>
+      String(r[idx["Away"]]||"") === teamFil ||
+      String(r[idx["Home"]]||"") === teamFil
+    );
+  }
+
+  rows.sort((a,b) => {
+    const ad = `${a[idx["Date"]]||""} ${a[idx["Time"]]||""}`;
+    const bd = `${b[idx["Date"]]||""} ${b[idx["Time"]]||""}`;
+    return ad.localeCompare(bd);
+  });
+
+  document.getElementById("schedule-count").textContent = `${rows.length} games`;
+  if (!rows.length) {
+    document.getElementById("schedule-list").innerHTML = `<div class="loading">No scheduled games found.</div>`;
+    return;
+  }
+
+  const byDate = {};
+  const dateOrder = [];
+  rows.forEach(r => {
+    const date = String(r[idx["Date"]]||"").trim();
+    if (!byDate[date]) { byDate[date] = []; dateOrder.push(date); }
+    byDate[date].push(r);
+  });
+
+  document.getElementById("schedule-list").innerHTML = dateOrder.map(date => `
+    <div class="date-group">
+      <div class="date-header">${formatGameDateHeader(date)}</div>
+      <div class="games-grid">
+        ${byDate[date].map(r => scheduleCardHtml(r, idx)).join("")}
+      </div>
+    </div>`).join("");
+}
+
+
+// PLAYOFF BRACKET
+let playoffBracketLoaded = false;
+
+function truthySetting(v) {
+  return ["yes","true","on","1","enabled"].includes(String(v||"").trim().toLowerCase());
+}
+
+async function refreshBracketVisibility() {
+  if (!SCHEDULE_SHEET_ID) return;
+  try {
+    const settings = await fetchScheduleSettings("Playoff Bracket Settings");
+    document.getElementById("bracket-nav-btn").style.display =
+      truthySetting(settings.bracket_enabled) ? "" : "none";
+  } catch(e) {
+    document.getElementById("bracket-nav-btn").style.display = "none";
+  }
+}
+
+async function loadPlayoffBracket() {
+  const target = document.getElementById("bracket-content");
+  try {
+    const settings = await fetchScheduleSettings("Playoff Bracket Settings");
+    if (!truthySetting(settings.bracket_enabled)) {
+      target.innerHTML = `<div class="loading">Playoff bracket is turned off in Playoff Bracket Settings.</div>`;
+      return;
+    }
+    const data = await fetchScheduleTab("Playoff Bracket");
+    renderPlayoffBracket(data, settings);
+    playoffBracketLoaded = true;
+    document.getElementById("bracket-nav-btn").style.display = "";
+  } catch(e) {
+    target.innerHTML = `<div class="loading">Could not load playoff bracket: ${e.message}</div>`;
+  }
+}
+
+function bracketRoundsFor(sideRows) {
+  const order = ["Round 1", "Round 2", "Conference Final", "Final"];
+  const found = [...new Set(sideRows.map(r => r.round).filter(Boolean))];
+  return order.filter(r => found.includes(r)).concat(found.filter(r => !order.includes(r)));
+}
+
+function bracketMatchupHtml(rows) {
+  return `<div class="bracket-matchup">${rows.map(r => {
+    const status = String(r.status||"").toLowerCase();
+    const winner = status === "winner" || status === "won" || String(r.wins||"") === "4";
+    return `<div class="bracket-team ${winner ? "winner" : ""}">
+      <div class="bracket-seed">${r.seed || ""}</div>
+      <div class="bracket-name">${r.team || "TBD"}</div>
+      <div class="bracket-wins">${r.wins || ""}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function bracketSideHtml(side, rows) {
+  const rounds = bracketRoundsFor(rows);
+  return `<div class="bracket-side ${side.toLowerCase()}">
+    ${rounds.map(round => {
+      const roundRows = rows.filter(r => r.round === round);
+      const seriesIds = [...new Set(roundRows.map(r => r.series))];
+      return `<div class="bracket-round">
+        <div class="bracket-round-title">${round}</div>
+        ${seriesIds.map(series => bracketMatchupHtml(roundRows.filter(r => r.series === series))).join("")}
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function renderPlayoffBracket(data, settings) {
+  const idx = getIndexMap(data.cols);
+  const rows = data.rows.map(r => ({
+    side: String(r[idx["Side"]]||"").trim(),
+    round: String(r[idx["Round"]]||"").trim(),
+    series: String(r[idx["Series"]]||"").trim(),
+    slot: String(r[idx["Slot"]]||"").trim(),
+    seed: String(r[idx["Seed"]]||"").trim(),
+    team: String(r[idx["Team"]]||"").trim(),
+    wins: String(r[idx["Wins"]]||"").trim(),
+    logo: String(r[idx["Logo URL"]]||"").trim(),
+    status: String(r[idx["Status"]]||"").trim(),
+  })).filter(r => r.side && r.round && r.series);
+
+  const east = rows.filter(r => r.side.toLowerCase() === "east");
+  const west = rows.filter(r => r.side.toLowerCase() === "west");
+  const finals = rows.filter(r => r.side.toLowerCase() === "finals");
+
+  document.getElementById("bracket-content").innerHTML = `
+    <div class="bracket-stage">
+      <div class="bracket-hero">
+        <div class="bracket-title">${settings.bracket_title || "PLAYOFFS"}</div>
+        <div class="bracket-subtitle">${settings.bracket_subtitle || ""}</div>
+      </div>
+      <div class="bracket-board">
+        ${bracketSideHtml("east", east)}
+        <div class="bracket-finals">
+          <div class="bracket-finals-label">${settings.finals_label || "CHAMPIONS"}</div>
+          ${finals.length ? bracketMatchupHtml(finals) : bracketMatchupHtml([{team:"TBD"},{team:"TBD"}])}
+        </div>
+        ${bracketSideHtml("west", west)}
+      </div>
+    </div>`;
+}
+
+
 let gameLogData    = { cols: [], rows: [] };
 let skaterLogData  = { cols: [], rows: [] };
 let goalieLogData  = { cols: [], rows: [] };
@@ -2289,17 +2694,20 @@ loadStandings();
 loadPlayers();
 loadGoalies();
 loadTeams();
+refreshBracketVisibility();
 
-// Lazy-load games when tab is first clicked
+// Lazy-load schedule/games when tabs are first clicked
 const _origShowPage = showPage;
 window.showPage = function(id, btn) {
   _origShowPage(id, btn);
+  if (id === 'schedule' && !scheduleData.cols.length) loadSchedule();
+  if (id === 'bracket' && !playoffBracketLoaded) loadPlayoffBracket();
   if (id === 'games' && !gameLogData.cols.length) loadGames();
 };
 
 // Restore active tab from URL hash on load
 (function restoreTab() {
-  const validTabs = ['standings','players','goalies','teams','games'];
+  const validTabs = ['standings','players','goalies','teams','schedule','bracket','games'];
   const hash = window.location.hash.replace('#','');
   if (validTabs.includes(hash)) {
     const btn = document.querySelector(`nav button[onclick*="'${hash}'"]`);
