@@ -1862,22 +1862,28 @@ async function loadSchedule() {
   }
 }
 
-function populateScheduleTeamFilter() {
+function populateScheduleTeamFilter(selectedValue) {
   const idx = getIndexMap(scheduleData.cols);
-  const teams = new Set();
+  const selected = selectedValue !== undefined
+    ? selectedValue
+    : document.getElementById("schedule-team-filter").value;
+  const teams = new Map();
   scheduleData.rows.forEach(r => {
-    teams.add(String(r[idx["Away"]]||"").trim());
-    teams.add(String(r[idx["Home"]]||"").trim());
+    ["Away", "Home"].forEach(col => {
+      const raw = String(r[idx[col]]||"").trim();
+      const abbr = nameToAbbr(cleanTeamName(raw));
+      if (abbr) teams.set(abbr, displayTeamName(raw));
+    });
   });
   const sel = document.getElementById("schedule-team-filter");
   sel.innerHTML = `<option value="">All Teams</option>`;
-  [...teams].sort().forEach(t => {
-    if (!t) return;
+  [...teams.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([abbr, name]) => {
     const o = document.createElement("option");
-    o.value = t;
-    o.textContent = t;
+    o.value = abbr;
+    o.textContent = name;
     sel.appendChild(o);
   });
+  sel.value = teams.has(selected) ? selected : "";
 }
 
 function filterSchedule() {
@@ -1886,8 +1892,9 @@ function filterSchedule() {
     loadSchedule();
     return;
   }
+  const selectedTeam = document.getElementById("schedule-team-filter").value;
   scheduleData = scheduleCache[tabName];
-  populateScheduleTeamFilter();
+  populateScheduleTeamFilter(selectedTeam);
   renderSchedule();
 }
 
@@ -1942,8 +1949,8 @@ function renderSchedule() {
 
   if (teamFil) {
     rows = rows.filter(r =>
-      String(r[idx["Away"]]||"") === teamFil ||
-      String(r[idx["Home"]]||"") === teamFil
+      nameToAbbr(cleanTeamName(String(r[idx["Away"]]||""))) === teamFil ||
+      nameToAbbr(cleanTeamName(String(r[idx["Home"]]||""))) === teamFil
     );
   }
 
