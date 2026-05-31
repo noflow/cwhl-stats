@@ -1804,6 +1804,9 @@ async function loadSchedule() {
       scheduleCache[tabName] = await fetchScheduleTab(tabName);
     }
     scheduleData = scheduleCache[tabName];
+    if (!gameLogData.cols.length) {
+      try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Played-game schedule matching unavailable", e); }
+    }
     populateScheduleTeamFilter();
     renderSchedule();
   } catch(e) {
@@ -1870,6 +1873,21 @@ function scheduleCardHtml(r, idx) {
   </div>`;
 }
 
+function scheduleTimeMinutes(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return 99999;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const meridiem = (match[3] || "").toUpperCase();
+
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+
+  return hour * 60 + minute;
+}
+
 function renderSchedule() {
   const idx = getIndexMap(scheduleData.cols);
   const teamFil = document.getElementById("schedule-team-filter").value;
@@ -1883,10 +1901,15 @@ function renderSchedule() {
   }
 
   rows.sort((a,b) => {
-    const ad = `${a[idx["Date"]]||""} ${a[idx["Time"]]||""}`;
-    const bd = `${b[idx["Date"]]||""} ${b[idx["Time"]]||""}`;
-    return ad.localeCompare(bd);
+    const dateCompare = String(a[idx["Date"]]||"").localeCompare(String(b[idx["Date"]]||""));
+    if (dateCompare) return dateCompare;
+    return scheduleTimeMinutes(a[idx["Time"]]) - scheduleTimeMinutes(b[idx["Time"]]);
   });
+
+  const playedKeys = playedScheduleKeys();
+  if (playedKeys.size) {
+    rows = rows.filter(r => !playedKeys.has(scheduleRowKey(r, idx)));
+  }
 
   document.getElementById("schedule-count").textContent = `${rows.length} games`;
   if (!rows.length) {
@@ -2055,6 +2078,44 @@ function abbrToDisplay(abbr) {
   return ABBR_TO_FULL[abbr] || abbr;
 }
 
+function cleanTeamName(name) {
+  return String(name || "")
+    .replace(/^\s*(CWHL|CWNHL|WCA)\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function displayTeamName(name) {
+  const abbr = nameToAbbr(cleanTeamName(name));
+  return ABBR_TO_FULL[abbr] || cleanTeamName(name);
+}
+
+function gameRowTeamAbbr(row, idx, teamCol) {
+  return nameToAbbr(cleanTeamName(String(row[idx[teamCol]] || "")));
+}
+
+function gameRowScheduleKey(row, idx) {
+  const date = String(row[idx["Date"]] || "").trim().split(" ")[0];
+  const a1 = gameRowTeamAbbr(row, idx, "Team 1");
+  const a2 = gameRowTeamAbbr(row, idx, "Team 2");
+  if (!date || !a1 || !a2) return "";
+  return `${date}|${[a1, a2].sort().join("|")}`;
+}
+
+function scheduleRowKey(row, idx) {
+  const date = String(row[idx["Date"]] || "").trim();
+  const away = nameToAbbr(cleanTeamName(String(row[idx["Away"]] || "")));
+  const home = nameToAbbr(cleanTeamName(String(row[idx["Home"]] || "")));
+  if (!date || !away || !home) return "";
+  return `${date}|${[away, home].sort().join("|")}`;
+}
+
+function playedScheduleKeys() {
+  if (!gameLogData.cols.length || !allGamesRaw.length) return new Set();
+  const idx = getIndexMap(gameLogData.cols);
+  return new Set(allGamesRaw.map(r => gameRowScheduleKey(r, idx)).filter(Boolean));
+}
+
 
 async function loadGames() {
   try {
@@ -2145,16 +2206,19 @@ async function loadGames() {
     });
 
     // Populate team filter
-    const teamNames = new Set();
+    const teamOptions = new Map();
     allGamesRaw.forEach(r => {
-      teamNames.add(String(r[glIdx["Team 1"]]||"").trim());
-      teamNames.add(String(r[glIdx["Team 2"]]||"").trim());
+      ["Team 1", "Team 2"].forEach(col => {
+        const raw = String(r[glIdx[col]]||"").trim();
+        const abbr = nameToAbbr(cleanTeamName(raw));
+        if (abbr) teamOptions.set(abbr, displayTeamName(raw));
+      });
     });
     const sel = document.getElementById("game-team-filter");
-    [...teamNames].sort().forEach(t => {
-      if (!t) return;
+    sel.innerHTML = `<option value="">All Teams</option>`;
+    [...teamOptions.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([abbr, name]) => {
       const o = document.createElement("option");
-      o.value = t; o.textContent = t; sel.appendChild(o);
+      o.value = abbr; o.textContent = name; sel.appendChild(o);
     });
 
     renderGames();
@@ -2176,8 +2240,8 @@ function renderGames() {
   let games = [...allGamesRaw];
   if (teamFil) {
     games = games.filter(r =>
-      String(r[glIdx["Team 1"]]||"") === teamFil ||
-      String(r[glIdx["Team 2"]]||"") === teamFil
+      gameRowTeamAbbr(r, glIdx, "Team 1") === teamFil ||
+      gameRowTeamAbbr(r, glIdx, "Team 2") === teamFil
     );
   }
 
@@ -2215,8 +2279,8 @@ function renderGames() {
   function gameCard(r, gameIdx) {
     const fullDate = String(r[glIdx["Date"]]||"").trim();
     const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
-    const t1    = String(r[glIdx["Team 1"]]||"").trim();
-    const t2    = String(r[glIdx["Team 2"]]||"").trim();
+    const t1    = displayTeamName(r[glIdx["Team 1"]]);
+    const t2    = displayTeamName(r[glIdx["Team 2"]]);
     const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
     const s2    = String(r[glIdx["Team 2 Score"]]||"0").trim();
     const r1    = String(r[glIdx["Team 1 Result"]]||"").trim();
@@ -2290,8 +2354,8 @@ function formatGameDateHeader(d) {
 function gameCardHtml(r, gameIdx, glIdx, source) {
   const fullDate = String(r[glIdx["Date"]]||"").trim();
   const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
-  const t1    = String(r[glIdx["Team 1"]]||"").trim();
-  const t2    = String(r[glIdx["Team 2"]]||"").trim();
+  const t1    = displayTeamName(r[glIdx["Team 1"]]);
+  const t2    = displayTeamName(r[glIdx["Team 2"]]);
   const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
   const s2    = String(r[glIdx["Team 2 Score"]]||"0").trim();
   const r1    = String(r[glIdx["Team 1 Result"]]||"").trim();
@@ -2369,8 +2433,10 @@ function openBoxScore(gameIdx, source) {
 
   const glIdx = getIndexMap(gameCols);
 
-  const t1  = String(gameRow[glIdx["Team 1"]]||"").trim();
-  const t2  = String(gameRow[glIdx["Team 2"]]||"").trim();
+  const t1Raw = String(gameRow[glIdx["Team 1"]]||"").trim();
+  const t2Raw = String(gameRow[glIdx["Team 2"]]||"").trim();
+  const t1  = displayTeamName(t1Raw);
+  const t2  = displayTeamName(t2Raw);
   const s1  = String(gameRow[glIdx["Team 1 Score"]]||"0").trim();
   const s2  = String(gameRow[glIdx["Team 2 Score"]]||"0").trim();
   const date = String(gameRow[glIdx["Date"]]||"").trim();
@@ -2400,14 +2466,16 @@ function openBoxScore(gameIdx, source) {
 
   // Split by team
   const teams = [t1, t2];
+  const rawTeams = [t1Raw, t2Raw];
   let bodyHtml = "";
 
   teams.forEach((team, ti) => {
+    const rawTeam = rawTeams[ti];
     const teamSkaters = skRows.filter(r =>
-      String(r[skIdx["Team"]]||"").trim().toLowerCase() === team.toLowerCase()
+      nameToAbbr(cleanTeamName(String(r[skIdx["Team"]]||"").trim())) === nameToAbbr(cleanTeamName(rawTeam))
     );
     const teamGoalies = glRows.filter(r =>
-      String(r[glGIdx["Team"]]||"").trim().toLowerCase() === team.toLowerCase()
+      nameToAbbr(cleanTeamName(String(r[glGIdx["Team"]]||"").trim())) === nameToAbbr(cleanTeamName(rawTeam))
     );
 
     const score = ti === 0 ? s1 : s2;
