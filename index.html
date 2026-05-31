@@ -47,8 +47,18 @@
     color: #fff;
     letter-spacing: 1px;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .logo span { color: var(--gold); }
+  .league-logo {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+  }
   nav {
     display: flex;
     gap: 4px;
@@ -281,6 +291,10 @@
     cursor: pointer;
     padding: 0;
     text-align: left;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
   }
   .stand-team-link:hover {
     color: var(--teal2);
@@ -288,6 +302,12 @@
     text-underline-offset: 3px;
   }
   .stand-team-abbr { display: none; }
+  .stand-logo {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    flex: 0 0 auto;
+  }
   .pts-bold { font-weight: 700; color: var(--teal); }
 
   /* ── TEAM TABS ── */
@@ -296,7 +316,7 @@
     background: #fff;
     border: 1.5px solid var(--grey2);
     border-radius: 5px;
-    padding: 6px 14px;
+    padding: 5px 12px;
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 700;
     font-size: 14px;
@@ -304,9 +324,18 @@
     color: var(--teal);
     transition: all 0.15s;
     letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
   }
   .team-btn:hover { background: var(--teal3); border-color: var(--teal); }
   .team-btn.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .team-btn-logo {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    flex: 0 0 auto;
+  }
   .team-banner {
     background: var(--teal);
     color: #fff;
@@ -317,6 +346,16 @@
     padding: 12px 18px;
     border-radius: 8px 8px 0 0;
     text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .team-banner-logo {
+    width: 46px;
+    height: 46px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
   }
   .subsection-label {
     background: var(--teal3);
@@ -539,6 +578,13 @@
     min-width: 140px;
     max-width: 100%;
   }
+  .game-team-logo {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.18));
+  }
   .game-team-name {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 15px;
@@ -638,6 +684,11 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 12px;
+      gap: 4px;
+    }
+    .stand-logo {
+      width: 18px;
+      height: 18px;
     }
     .stand-team-full {
       display: none;
@@ -669,6 +720,10 @@
     }
     .game-team-name {
       font-size: 13px;
+    }
+    .game-team-logo {
+      width: 32px;
+      height: 32px;
     }
     .game-score-wrap {
       gap: 6px;
@@ -931,7 +986,7 @@
 <body>
 
 <header>
-  <div class="logo">CWHL <span>NHL</span></div>
+  <div class="logo"><img class="league-logo" src="images/NHL%20Logo.png" alt="">CWHL <span>NHL</span></div>
   <nav id="main-nav">
     <button class="active" onclick="showPage('standings', this)">Standings</button>
     <button onclick="showPage('players', this)">Player Stats</button>
@@ -1300,7 +1355,7 @@ async function loadStandings() {
               <tbody>
                 ${divTeams.map((t,i) => `
                   <tr>
-                    <td><button class="stand-team-link" onclick="openTeamRoster('${t.abbr}')"><span class="stand-team-full">${t.name}</span><span class="stand-team-abbr">${t.abbr}</span></button></td>
+                    <td><button class="stand-team-link" onclick="openTeamRoster('${t.abbr}')">${teamLogoImg(t.abbr, "stand-logo", t.name)}<span class="stand-team-full">${t.name}</span><span class="stand-team-abbr">${t.abbr}</span></button></td>
                     <td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${t.otl}</td>
                     <td class="pts-bold">${t.pts}</td><td>${t.gf}</td><td>${t.ga}</td>
                   </tr>`).join("")}
@@ -1504,7 +1559,7 @@ let activeTeam = null;
 async function loadTeams() {
   const nav = document.getElementById("team-nav");
   nav.innerHTML = TEAMS.map(t =>
-    `<button class="team-btn" onclick="showTeam('${t.abbr}', this)">${t.abbr}</button>`
+    `<button class="team-btn" onclick="showTeam('${t.abbr}', this)">${teamLogoImg(t.abbr, "team-btn-logo", t.name)}<span>${t.abbr}</span></button>`
   ).join("");
   // Auto-load first team
   const firstBtn = nav.querySelector(".team-btn");
@@ -1801,7 +1856,7 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
 
   document.getElementById("team-content").innerHTML = `
     <div style="background:#fff;border-radius:8px;box-shadow:0 2px 16px rgba(0,0,0,0.08);overflow:hidden;margin-bottom:24px;">
-      <div class="team-banner">${teamName}</div>
+      <div class="team-banner">${teamLogoImg(abbr, "team-banner-logo", teamName)}<span>${teamName}</span></div>
       <div class="subsection-label">Skaters</div>
       <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
         ${makeTable(skHeaders, skRows, ptsIdx, skRows.length ? totals : null)}
@@ -1909,6 +1964,7 @@ function scheduleCardHtml(r, idx) {
     ${time ? `<div class="game-date">${time}</div>` : ""}
     <div class="game-teams">
       <div class="game-team">
+        ${teamLogoImg(away, "game-team-logo", away)}
         <div class="game-team-name">${away}</div>
         <div class="game-badge"><span class="badge">AWAY</span></div>
       </div>
@@ -1916,6 +1972,7 @@ function scheduleCardHtml(r, idx) {
         <div class="game-sep">@</div>
       </div>
       <div class="game-team">
+        ${teamLogoImg(home, "game-team-logo", home)}
         <div class="game-team-name">${home}</div>
         <div class="game-badge"><span class="badge">HOME</span></div>
       </div>
@@ -2106,6 +2163,19 @@ const ABBR_TO_FULL = {
   OTT:"Ottawa Senators",     MTL:"Montreal Canadiens",
 };
 
+const TEAM_LOGO_FILES = {
+  CAR:"Carolina Hurricanes.png",
+  CBJ:"Columbus Blue Jackets.png",
+  SJS:"San Jose Sharks.png",
+  LAK:"Los Angeles Kings.png",
+  DAL:"Dallas Stars.png",
+  VGK:"Vegas Golden Knights.png",
+  TOR:"Toronto Maple Leafs.png",
+  NSH:"Nashville Predators.png",
+  OTT:"Ottawa Senators.png",
+  MTL:"Montréal Canadiens.png",
+};
+
 const ABBR_TO_KEYWORDS = {
   "CAR": ["carolina","hurricanes"],
   "CBJ": ["columbus"],
@@ -2130,6 +2200,16 @@ function nameToAbbr(name) {
 
 function abbrToDisplay(abbr) {
   return ABBR_TO_FULL[abbr] || abbr;
+}
+
+function teamLogoSrc(abbrOrName) {
+  const abbr = nameToAbbr(cleanTeamName(abbrOrName));
+  const file = TEAM_LOGO_FILES[abbr] || `${displayTeamName(abbrOrName)}.png`;
+  return `images/${encodeURIComponent(file)}`;
+}
+
+function teamLogoImg(abbrOrName, className = "team-logo", alt = "") {
+  return `<img class="${className}" src="${teamLogoSrc(abbrOrName)}" alt="${alt}" loading="lazy" onerror="this.style.display='none'">`;
 }
 
 function cleanTeamName(name) {
@@ -2354,6 +2434,7 @@ function renderGames() {
       ${timeOnly ? `<div class="game-date">${timeOnly}</div>` : ""}
       <div class="game-teams">
         <div class="game-team">
+          ${teamLogoImg(r[glIdx["Team 1"]], "game-team-logo", t1)}
           <div class="game-team-name ${t1wins?"winner":""}">${t1}</div>
           <div class="game-badge">${t1wins?'<span class="badge">W</span>':''}</div>
         </div>
@@ -2363,6 +2444,7 @@ function renderGames() {
           <div class="game-score ${t2wins?"":"loser"}">${s2}</div>
         </div>
         <div class="game-team">
+          ${teamLogoImg(r[glIdx["Team 2"]], "game-team-logo", t2)}
           <div class="game-team-name ${t2wins?"winner":""}">${t2}</div>
           <div class="game-badge">${t2wins?'<span class="badge">W</span>':''}</div>
         </div>
@@ -2431,6 +2513,7 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
     ${timeOnly ? `<div class="game-date">${timeOnly}</div>` : ""}
     <div class="game-teams">
       <div class="game-team">
+        ${teamLogoImg(r[glIdx["Team 1"]], "game-team-logo", t1)}
         <div class="game-team-name ${t1wins?"winner":""}">${t1}</div>
         <div class="game-badge">${t1wins?'<span class="badge">W</span>':''}</div>
       </div>
@@ -2440,6 +2523,7 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
         <div class="game-score ${t2wins?"":"loser"}">${s2}</div>
       </div>
       <div class="game-team">
+        ${teamLogoImg(r[glIdx["Team 2"]], "game-team-logo", t2)}
         <div class="game-team-name ${t2wins?"winner":""}">${t2}</div>
         <div class="game-badge">${t2wins?'<span class="badge">W</span>':''}</div>
       </div>
