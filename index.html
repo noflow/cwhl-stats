@@ -1502,9 +1502,22 @@ async function loadPlayers() {
     const raw = await fetchTab("Player Stats");
     // cols come from gviz col labels (row 1 of sheet), rows are data only
     playerData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols };
-    const teams = [...new Set(playerData.rows.map(r => String(r[2]||"")).filter(Boolean))].sort();
+    const idx = getIndexMap(playerData.cols);
+    const teamIdx = idx["Team"] ?? 2;
+    const teams = new Map();
+    playerData.rows.forEach(r => {
+      const rawTeam = String(r[teamIdx]||"").trim();
+      const abbr = nameToAbbr(cleanTeamName(rawTeam));
+      if (abbr) teams.set(abbr, displayTeamName(rawTeam));
+    });
     const sel = document.getElementById("team-filter");
-    teams.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o); });
+    sel.innerHTML = `<option value="">All Teams</option>`;
+    [...teams.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([abbr, name]) => {
+      const o = document.createElement("option");
+      o.value = abbr;
+      o.textContent = name;
+      sel.appendChild(o);
+    });
     // Set default sort to PTS column by name
     const ptsIdx = playerData.cols.findIndex(h => h.trim() === "PTS");
     if (ptsIdx !== -1) sortState.players.col = ptsIdx;
@@ -1537,7 +1550,7 @@ function renderPlayers() {
     if (search && !name.includes(search) && !rawPos.includes(search) && shortPos !== search) return false;
     if (posFil && posFil.length > 1 && posShort(pos) !== posFil) return false;
     if (posFil && posFil.length === 1 && posGroup(pos) !== posFil) return false;
-    if (teamFil && team !== teamFil) return false;
+    if (teamFil && nameToAbbr(cleanTeamName(team)) !== teamFil) return false;
     return true;
   });
 
