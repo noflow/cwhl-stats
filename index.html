@@ -2572,7 +2572,7 @@ function renderGames() {
         </div>
         <div class="game-score-wrap">
           <div class="game-score ${t1wins?"":"loser"}">${s1}</div>
-          <div class="game-sep">–</div>
+          <div class="game-sep">-</div>
           <div class="game-score ${t2wins?"":"loser"}">${s2}</div>
         </div>
         <div class="game-team">
@@ -2654,7 +2654,7 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
       </div>
       <div class="game-score-wrap">
         <div class="game-score ${t1wins?"":"loser"}">${s1}</div>
-        <div class="game-sep">â€“</div>
+        <div class="game-sep">-</div>
         <div class="game-score ${t2wins?"":"loser"}">${s2}</div>
       </div>
       <div class="game-team">
@@ -2720,7 +2720,7 @@ function openBoxScore(gameIdx, source) {
   document.getElementById("box-scoreline").textContent =
     `${t1}  ${s1} – ${s2}  ${t2}`;
   document.getElementById("box-meta").textContent =
-    `${date}${ot ? "  •  OT" : ""}  •  Match ${matchId}`;
+    `${date}${ot ? "  |  OT" : ""}  |  Match ${matchId}`;
 
   // matchId is now just the first part (e.g. "20330647190485")
   // Skater/Goalie logs may have the full "20330647190485+20330968880391"
