@@ -2481,7 +2481,7 @@ async function loadGames() {
     console.log("Forfeit rows kept:", allGamesRaw.filter(r => {
       const mid = String(r[glMidIdx]||r[0]||"").trim().toUpperCase();
       const stitched = String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase();
-      return mid.startsWith("FORFEIT_") || stitched === "FORFEIT";
+      return isForfeitMatchId(mid) || stitched === "FORFEIT";
     }).length);
     const sel = document.getElementById("game-team-filter");
     sel.innerHTML = `<option value="">All Teams</option>`;
@@ -2558,7 +2558,7 @@ function renderGames() {
     const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
     const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
     const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-    const forfeit = matchId.toUpperCase().startsWith("FORFEIT_") ||
+    const forfeit = isForfeitMatchId(matchId) ||
       String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
     const t1wins = r1 === "Win";
     const t2wins = r2 === "Win";
@@ -2619,6 +2619,14 @@ function normalizeMatchId(mid) {
   return String(mid||"").trim().split("-")[0].split("+")[0].trim();
 }
 
+function isForfeitMatchId(mid) {
+  const value = normalizeMatchId(mid).toUpperCase();
+  if (value.startsWith("FORFEIT_")) return true;
+  if (!/^\d{14}$/.test(value)) return false;
+  const suffix = value.slice(8);
+  return /^[1-9]{6}$/.test(suffix) && new Set(suffix.split("")).size === 1;
+}
+
 function formatGameDateHeader(d) {
   try {
     const dt = new Date(d + "T12:00:00");
@@ -2639,7 +2647,7 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
   const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
   const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
   const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-  const forfeit = matchId.toUpperCase().startsWith("FORFEIT_") ||
+  const forfeit = isForfeitMatchId(matchId) ||
     String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
   const t1wins = r1 === "Win";
   const t2wins = r2 === "Win";
