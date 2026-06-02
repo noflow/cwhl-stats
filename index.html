@@ -1238,7 +1238,7 @@ const TEAMS = [
 async function fetchTab(tabName) {
   // headers=1 tells gviz the first row IS the header — it returns col labels
   // AND all data rows separately, so we get clean header + data split
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
@@ -1308,7 +1308,7 @@ function parseCSV(text) {
 async function fetchSourceTab(tabName) {
   // Use gviz CSV output — served via gviz (no CORS issues) AND
   // returns raw text values so "123+456" match IDs are preserved as-is
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
@@ -1323,7 +1323,7 @@ async function fetchScheduleTab(tabName) {
   if (!SCHEDULE_SHEET_ID) {
     throw new Error("Schedule sheet ID has not been added to the website yet.");
   }
-  const url = `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
@@ -1347,7 +1347,7 @@ async function fetchScheduleSettings(tabName) {
 
 async function fetchSourceTabGviz(tabName) {
   // Backup: standard gviz JSON (drops lagout rows with + in match ID)
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1`;
+  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = await res.text();
