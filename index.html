@@ -2622,8 +2622,13 @@ function normalizeMatchId(mid) {
 function isForfeitMatchId(mid) {
   const value = normalizeMatchId(mid).toUpperCase();
   if (value.startsWith("FORFEIT_")) return true;
-  if (!/^\d{14}$/.test(value)) return false;
-  const suffix = value.slice(8);
+  let numeric = value.replace(/[^\d]/g, "");
+  if (numeric.length !== 14 && /[.E]/i.test(value)) {
+    const parsed = Number(value.replace(/,/g, ""));
+    if (Number.isFinite(parsed)) numeric = Math.trunc(parsed).toString();
+  }
+  if (!/^\d{14}$/.test(numeric)) return false;
+  const suffix = numeric.slice(8);
   return /^[1-9]{6}$/.test(suffix) && new Set(suffix.split("")).size === 1;
 }
 
