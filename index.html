@@ -2431,8 +2431,9 @@ async function loadGames() {
     // (A mangled lagout ID would be a very large or negative number not matching any real ID)
     // Simpler: keep all game log rows, then add lagout rows on top
     allGamesRaw = gl.rows.filter(r => {
-      const mid = String(r[0]||"").trim();
-      if (!mid || mid === "Match ID") return false;
+      const mid = String(r[glMidIdx]||r[0]||"").trim();
+      const stitched = String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase();
+      if ((!mid || mid === "Match ID") && stitched !== "FORFEIT") return false;
       // Skip mangled lagout rows — they won't match any skater log entry
       // We identify them by checking if this ID is a first-part of a lagout
       // but only if the full compound version exists in skater log
@@ -2477,6 +2478,11 @@ async function loadGames() {
         if (abbr) teamOptions.set(abbr, displayTeamName(raw));
       });
     });
+    console.log("Forfeit rows kept:", allGamesRaw.filter(r => {
+      const mid = String(r[glMidIdx]||r[0]||"").trim().toUpperCase();
+      const stitched = String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase();
+      return mid.startsWith("FORFEIT_") || stitched === "FORFEIT";
+    }).length);
     const sel = document.getElementById("game-team-filter");
     sel.innerHTML = `<option value="">All Teams</option>`;
     [...teamOptions.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([abbr, name]) => {
@@ -2552,7 +2558,8 @@ function renderGames() {
     const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
     const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
     const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-    const forfeit = matchId.toUpperCase().startsWith("FORFEIT_");
+    const forfeit = matchId.toUpperCase().startsWith("FORFEIT_") ||
+      String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
     const t1wins = r1 === "Win";
     const t2wins = r2 === "Win";
 
@@ -2632,7 +2639,8 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
   const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
   const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
   const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-  const forfeit = matchId.toUpperCase().startsWith("FORFEIT_");
+  const forfeit = matchId.toUpperCase().startsWith("FORFEIT_") ||
+    String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
   const t1wins = r1 === "Win";
   const t2wins = r2 === "Win";
 
