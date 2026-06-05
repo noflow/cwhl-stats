@@ -1502,10 +1502,11 @@ async function loadPlayers() {
     const raw = await fetchTab("Player Stats");
     // cols come from gviz col labels (row 1 of sheet), rows are data only
     playerData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols };
+    try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Current-team mapping unavailable for player totals", e); }
     const idx = getIndexMap(playerData.cols);
     const teamIdx = idx["Team"] ?? 2;
     const teams = new Map();
-    playerData.rows.forEach(r => {
+    buildLeaguePlayerRows(playerData.rows, playerData.cols, false).forEach(r => {
       const rawTeam = String(r[teamIdx]||"").trim();
       const abbr = nameToAbbr(cleanTeamName(rawTeam));
       if (abbr) teams.set(abbr, displayTeamName(rawTeam));
@@ -1529,12 +1530,43 @@ async function loadPlayers() {
 
 function filterPlayers() { renderPlayers(); }
 
+function buildLeaguePlayerRows(rows, headers, isGoalie) {
+  const idx = getIndexMap(headers);
+  const nameIdx = idx["Username"];
+  const teamIdx = idx["Team"];
+  if (nameIdx === undefined) return rows;
+
+  const currentTeams = buildCurrentTeamMap();
+  const byName = new Map();
+  rows.forEach(r => {
+    const name = cleanPlayerName(r[nameIdx]);
+    if (!name) return;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(r);
+  });
+
+  const leagueRows = [];
+  byName.forEach((playerRows, name) => {
+    const fallbackTeam = playerRows
+      .map(r => nameToAbbr(cleanTeamName(r[teamIdx])))
+      .filter(Boolean)
+      .slice(-1)[0] || "";
+    const currentTeam = currentTeams[name]?.team || fallbackTeam;
+    const row = playerRows.length > 1
+      ? aggregatePlayerRows(playerRows, headers, currentTeam, isGoalie)
+      : [...playerRows[0]];
+    if (currentTeam && teamIdx !== undefined) row[teamIdx] = currentTeam;
+    leagueRows.push(row);
+  });
+  return leagueRows;
+}
+
 function renderPlayers() {
   const search = document.getElementById("player-search").value.trim().toLowerCase();
   const posFil = document.getElementById("pos-filter").value;
   const teamFil = document.getElementById("team-filter").value;
   const cols = playerData.cols;
-  const rows = playerData.rows;
+  const rows = buildLeaguePlayerRows(playerData.rows, playerData.cols, false);
   if (!cols.length) return;
   const idx = getIndexMap(cols);
   const nameIdx = idx["Username"] ?? 1;
@@ -1801,6 +1833,17 @@ function aggregatePlayerRows(rows, headers, targetAbbr, isGoalie) {
   const getSum = col => sumCols.get(col) || 0;
   const setCol = (col, val) => { const ci = idx[col]; if (ci !== undefined) out[ci] = val; };
   const gp = getSum("GP");
+
+  if (!isGoalie && idx["Position"] !== undefined) {
+    const positionGp = new Map();
+    rows.forEach(r => {
+      const pos = String(r[idx["Position"]]||"").trim();
+      if (!pos) return;
+      positionGp.set(pos, (positionGp.get(pos) || 0) + parseStatNumber(r[idx["GP"]]));
+    });
+    const mainPosition = [...positionGp.entries()].sort((a,b) => b[1] - a[1])[0]?.[0];
+    if (mainPosition) out[idx["Position"]] = mainPosition;
+  }
 
   if (!isGoalie) {
     const g = getSum("G"), a = getSum("A"), pts = getSum("PTS") || g + a;
