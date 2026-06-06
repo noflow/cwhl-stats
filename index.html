@@ -3136,9 +3136,17 @@ function scaleScore(value, eliteTarget) {
   return clampRating((value / eliteTarget) * 100);
 }
 
-function calculateSkaterOverall(stats) {
+function defenseSkaterGameShare(playerName, stats) {
+  const positions = buildSkaterPositionBreakdown(playerName);
+  const total = positions.reduce((sum, item) => sum + item.games, 0);
+  if (!total) return posShort(stats && stats["Position"]) === "D" ? 1 : 0;
+  const defense = positions.find(item => item.short === "D");
+  return clampRating((defense?.games || 0) / total, 0, 1);
+}
+
+function calculateSkaterOverall(stats, playerName = "") {
   const gp = Math.max(1, statGpValue(stats));
-  const position = posShort(stats["Position"]);
+  const defenseShare = defenseSkaterGameShare(playerName, stats);
   const ptsPerGame = parseStatNumber(stats["Pts/GP"]) || statPerGame(stats, "PTS", gp);
   const goalsPerGame = parseStatNumber(stats["G/GP"]) || statPerGame(stats, "G", gp);
   const assistsPerGame = parseStatNumber(stats["A/GP"]) || statPerGame(stats, "A", gp);
@@ -3204,13 +3212,13 @@ function calculateSkaterOverall(stats) {
     statScore(stats, "Teamplay Rating") * 0.30
   );
 
-  const isDefense = position === "D";
-  const component = isDefense
-    ? offensiveProduction * 0.16 + defenseImpact * 0.28 + ratingsBlend * 0.26 + puck * 0.10 + physical * 0.12 + discipline * 0.08
-    : offensiveProduction * 0.28 + defenseImpact * 0.18 + ratingsBlend * 0.24 + puck * 0.12 + physical * 0.10 + discipline * 0.08;
+  const defenseComponent = offensiveProduction * 0.16 + defenseImpact * 0.28 + ratingsBlend * 0.26 + puck * 0.10 + physical * 0.12 + discipline * 0.08;
+  const forwardComponent = offensiveProduction * 0.28 + defenseImpact * 0.18 + ratingsBlend * 0.24 + puck * 0.12 + physical * 0.10 + discipline * 0.08;
+  const component = defenseComponent * defenseShare + forwardComponent * (1 - defenseShare);
 
   const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
-  return Math.round(clampRating(55 + component * 0.44 + gpAdjustment, 55, 99));
+  const defensemanBoost = defenseShare * (3 + (defenseImpact >= 70 ? 2 : 0) + (defenseImpact >= 85 ? 1 : 0));
+  return Math.round(clampRating(55 + component * 0.44 + gpAdjustment + defensemanBoost, 55, 99));
 }
 
 function calculateGoalieOverall(stats) {
@@ -3247,13 +3255,13 @@ function calculateGoalieOverall(stats) {
   return Math.round(clampRating(55 + component * 0.44 + gpAdjustment, 55, 99));
 }
 
-function calculatePlayerOverall(stats, role) {
+function calculatePlayerOverall(stats, role, playerName = "") {
   if (!stats) return null;
-  return role === "goalie" ? calculateGoalieOverall(stats) : calculateSkaterOverall(stats);
+  return role === "goalie" ? calculateGoalieOverall(stats) : calculateSkaterOverall(stats, playerName);
 }
 
-function renderOverallBadge(stats, role) {
-  const overall = calculatePlayerOverall(stats, role);
+function renderOverallBadge(stats, role, playerName = "") {
+  const overall = calculatePlayerOverall(stats, role, playerName);
   if (!overall) return "";
   return `<span class="ovr-badge" title="Overall rating based on this card's current stats view"><strong>${overall}</strong> OVR</span>`;
 }
@@ -3376,6 +3384,55 @@ function renderPositionSummary(stats, role) {
   </div>`;
 }
 
+function buildSkaterPositionBreakdown(playerName) {
+  const counts = new Map();
+  const wantedName = String(playerName || "").trim().toLowerCase();
+
+  const addPosition = (short, label, games) => {
+    const key = short || "UNK";
+    const previous = counts.get(key);
+    counts.set(key, {
+      short: key,
+      label,
+      games: (previous?.games || 0) + (games || 0),
+    });
+  };
+
+  if (skaterLogData.cols.length) {
+    const idx = getIndexMap(skaterLogData.cols);
+    const nameIdx = idx["Username"];
+    const posIdx = idx["Position"];
+    if (nameIdx !== undefined && posIdx !== undefined) {
+      skaterLogData.rows.forEach(r => {
+        if (String(r[nameIdx] || "").trim().toLowerCase() !== wantedName) return;
+        const raw = String(r[posIdx] || "").trim();
+        const short = posShort(raw) || raw || "UNK";
+        addPosition(short, positionDisplayLabel(raw || short), 1);
+      });
+    }
+  }
+
+  if (!counts.size) {
+    const skaterRows = findPlayerRoleRows(playerName, false);
+    const skIdx = getIndexMap(skaterRows.headers);
+    const posIdx = skIdx["Position"];
+    const skGpIdx = skIdx["GP"];
+    if (skaterRows.rows.length && posIdx !== undefined) {
+      skaterRows.rows.forEach(r => {
+        if (String(r[skIdx["Username"]] || "").trim().toLowerCase() !== wantedName) return;
+        const raw = String(r[posIdx] || "").trim();
+        const short = posShort(raw) || raw || "UNK";
+        const gp = skGpIdx !== undefined ? parseStatNumber(r[skGpIdx]) : 1;
+        addPosition(short, positionDisplayLabel(raw || short), gp);
+      });
+    }
+  }
+
+  return [...counts.values()]
+    .filter(item => item.games > 0)
+    .sort((a, b) => b.games - a.games);
+}
+
 function buildPositionBreakdown(playerName) {
   const counts = new Map();
 
@@ -3389,18 +3446,9 @@ function buildPositionBreakdown(playerName) {
     });
   };
 
-  const skaterRows = findPlayerRoleRows(playerName, false);
-  const skIdx = getIndexMap(skaterRows.headers);
-  const posIdx = skIdx["Position"];
-  const skGpIdx = skIdx["GP"];
-  if (skaterRows.rows.length && posIdx !== undefined) {
-    skaterRows.rows.forEach(r => {
-      const raw = String(r[posIdx] || "").trim();
-      const short = posShort(raw) || raw || "UNK";
-      const gp = skGpIdx !== undefined ? parseStatNumber(r[skGpIdx]) : 1;
-      addPosition(short, positionDisplayLabel(raw || short), gp);
-    });
-  }
+  buildSkaterPositionBreakdown(playerName).forEach(item => {
+    addPosition(item.short, item.label, item.games);
+  });
 
   const goalieRows = findPlayerRoleRows(playerName, true);
   const glIdx = getIndexMap(goalieRows.headers);
@@ -3532,7 +3580,7 @@ function updatePlayerModalMeta(role) {
   const team = activeStats["Team"] || card.clickedStats?.["Team"] || "";
   const pos = activeRole === "goalie" ? "Goalie" : (activeStats["Position"] || card.clickedStats?.["Position"] || "");
   const plat = activeStats["Platform"] || card.clickedStats?.["Platform"] || "";
-  const overallBadge = renderOverallBadge(activeStats, activeRole);
+  const overallBadge = renderOverallBadge(activeStats, activeRole, card.playerName);
 
   meta.innerHTML = `
     <span><strong style="color:#fff">${team}</strong></span>
