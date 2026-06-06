@@ -3329,14 +3329,14 @@ function renderPositionBreakdown(playerName) {
     const end = cursor + (item.games / total) * 360;
     cursor = end;
     const mid = positions.length === 1 ? 90 : start + ((end - start) / 2);
-    const edge = positionCalloutPoint(mid, 25, 34);
-    const label = positionCalloutPoint(mid, 42, 60);
+    const edge = positionCalloutPoint(mid, 25, 36);
+    const label = positionCalloutPoint(mid, 38, 49);
     const lineAngle = mid - 90;
     const labelClass = Math.cos((mid - 90) * Math.PI / 180) < 0 ? "pos-left" : "pos-right";
     const pct = ((item.games / total) * 100).toFixed(1);
     const color = positionChartColor(item.short);
     return `
-      <span class="position-leader" style="--line-x:${edge.x};--line-y:${edge.y};--line-angle:${lineAngle}deg;--line-w:18px;--line-color:${color}"></span>
+      <span class="position-leader" style="--line-x:${edge.x};--line-y:${edge.y};--line-angle:${lineAngle}deg;--line-w:16px;--line-color:${color}"></span>
       <span class="position-label ${labelClass}" style="--label-x:${label.x};--label-y:${label.y}">
         <span class="position-label-pos">${item.short}</span>
         <span class="position-label-games">${formatStatNumber(item.games)} GP</span>
