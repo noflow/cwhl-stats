@@ -3240,12 +3240,35 @@ function calculateSkaterOverall(stats, playerName = "") {
     (offensiveProduction >= 92 ? 0.35 : 0) +
     (puck >= 86 ? 0.2 : 0)
   );
+  const defenseRaw = 60 + defenseComponent * 0.34 + defensemanBoost;
+  const forwardRaw = 64 + forwardComponent * 0.32 + forwardBoost;
+  const rawRating = defenseRaw * defenseShare + forwardRaw * forwardShare + gpAdjustment;
+
+  const isMostlyDefense = defenseShare >= 0.5;
   let ratingCap = 88;
-  if (component >= 68) ratingCap = 90;
-  if (component >= 76) ratingCap = 92;
-  if (component >= 84 && (offensiveProduction >= 82 || defensemanDefenseImpact >= 82)) ratingCap = 94;
-  if (component >= 91 && (offensiveProduction >= 90 || defensemanDefenseImpact >= 90) && ratingsBlend >= 82) ratingCap = 96;
-  return Math.round(clampRating(64 + component * 0.32 + gpAdjustment + defensemanBoost + forwardBoost, 70, ratingCap));
+  if (isMostlyDefense) {
+    const defenseProfile = Math.max(defensemanDefenseImpact, offensiveProduction);
+    ratingCap = 79;
+    if (defenseProfile >= 52) ratingCap = 81;
+    if (defenseProfile >= 60) ratingCap = 84;
+    if (defenseProfile >= 68) ratingCap = 86;
+    if (defenseProfile >= 76 && ratingsBlend >= 70) ratingCap = 88;
+    if (defenseProfile >= 84 && ratingsBlend >= 76) ratingCap = 90;
+    if (defenseProfile >= 90 && ratingsBlend >= 82 && component >= 86) ratingCap = 91;
+    if (defenseProfile >= 95 && defensemanDefenseImpact >= 92 && ratingsBlend >= 86 && component >= 91) ratingCap = 93;
+  } else {
+    const forwardProfile = Math.max(offensiveProduction, puck);
+    ratingCap = 79;
+    if (forwardProfile >= 52) ratingCap = 81;
+    if (forwardProfile >= 60) ratingCap = 84;
+    if (forwardProfile >= 68) ratingCap = 86;
+    if (forwardProfile >= 76 && component >= 70) ratingCap = 88;
+    if (forwardProfile >= 84 && component >= 78) ratingCap = 90;
+    if (forwardProfile >= 89 && component >= 84 && ratingsBlend >= 76) ratingCap = 92;
+    if (forwardProfile >= 93 && offensiveProduction >= 90 && component >= 88 && ratingsBlend >= 80) ratingCap = 94;
+    if (forwardProfile >= 97 && offensiveProduction >= 95 && component >= 92 && ratingsBlend >= 84) ratingCap = 96;
+  }
+  return Math.round(clampRating(rawRating, 70, ratingCap));
 }
 
 function calculateGoalieOverall(stats) {
