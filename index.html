@@ -3304,8 +3304,11 @@ function topSkillLabel(stats, role) {
     statPerGame(stats, "Interceptions", gp);
 
   if (position === "D") {
-    const offensiveDefenseScore = ptsPg * 3.25 + goalsPg * 1.4 + assistsPg * 1.25 + offenseRating / 24;
-    const defensiveDefenseScore = defenseImpact * 1.55 + defenseRating / 20 + physicalPg * 0.45;
+    if (ptsPg >= 2.0 || goalsPg >= 0.55 || assistsPg >= 1.25) return "Offensive Defensemen";
+    if (offenseRating >= 82 && ptsPg >= 1.3) return "Offensive Defensemen";
+
+    const offensiveDefenseScore = ptsPg * 5.2 + goalsPg * 2.0 + assistsPg * 1.7 + offenseRating / 18;
+    const defensiveDefenseScore = defenseImpact * 1.2 + defenseRating / 22 + physicalPg * 0.35;
     return offensiveDefenseScore >= defensiveDefenseScore ? "Offensive Defensemen" : "Defensive Defensemen";
   }
 
