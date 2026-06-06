@@ -556,10 +556,12 @@
     flex: 0 0 auto;
   }
   .position-breakdown {
-    margin: 8px 0 24px;
+    margin: 0 0 18px;
     min-height: 164px;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    padding-right: 18px;
   }
   .position-chart-wrap {
     position: relative;
@@ -641,9 +643,11 @@
   }
   @media (max-width: 560px) {
     .position-breakdown {
-      margin-top: 8px;
-      margin-bottom: 22px;
+      margin-top: 0;
+      margin-bottom: 18px;
       min-height: 148px;
+      padding-right: 0;
+      justify-content: center;
     }
     .position-chart-wrap { width: 218px; height: 148px; }
     .position-chart {
@@ -3338,8 +3342,7 @@ function renderPositionBreakdown(playerName) {
       </span>`;
   }).join("");
 
-  return `<div class="stat-section-title">Positions Played</div>
-    <div class="position-breakdown">
+  return `<div class="position-breakdown">
       <div class="position-chart-wrap">
         <div class="position-chart" style="background: conic-gradient(${gradient})" data-slices="${escapeAttr(JSON.stringify(slices))}" onmousemove="handlePositionPieMove(event, this)" onmouseleave="clearPositionPieHover(this)">
           <span class="position-hover-dim"></span>
