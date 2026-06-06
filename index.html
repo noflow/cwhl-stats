@@ -3228,23 +3228,24 @@ function calculateSkaterOverall(stats, playerName = "") {
 
   const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
   const defensemanBoost = defenseShare * (
-    1.25 +
-    scaleScore(defensemanDefenseImpact, 100) * 2.5 +
-    (takeawaysPg >= 3 ? 0.5 : 0) +
-    (interceptionsPg >= 2 ? 0.5 : 0)
+    0.8 +
+    scaleScore(defensemanDefenseImpact, 100) * 1.6 +
+    (takeawaysPg >= 3 ? 0.35 : 0) +
+    (interceptionsPg >= 2 ? 0.35 : 0)
   );
   const forwardShare = 1 - defenseShare;
   const forwardBoost = forwardShare * (
-    1.25 +
-    (offensiveProduction >= 78 ? 0.75 : 0) +
-    (offensiveProduction >= 90 ? 0.5 : 0) +
-    (puck >= 84 ? 0.25 : 0)
+    0.8 +
+    (offensiveProduction >= 80 ? 0.5 : 0) +
+    (offensiveProduction >= 92 ? 0.35 : 0) +
+    (puck >= 86 ? 0.2 : 0)
   );
-  let ratingCap = 94;
-  if (component >= 78) ratingCap = 96;
-  if (component >= 86 && (offensiveProduction >= 86 || defensemanDefenseImpact >= 86)) ratingCap = 98;
-  if (component >= 92 && offensiveProduction >= 90 && defensemanDefenseImpact >= 82 && ratingsBlend >= 86) ratingCap = 99;
-  return Math.round(clampRating(55 + component * 0.405 + gpAdjustment + defensemanBoost + forwardBoost, 55, ratingCap));
+  let ratingCap = 88;
+  if (component >= 68) ratingCap = 90;
+  if (component >= 76) ratingCap = 92;
+  if (component >= 84 && (offensiveProduction >= 82 || defensemanDefenseImpact >= 82)) ratingCap = 94;
+  if (component >= 91 && (offensiveProduction >= 90 || defensemanDefenseImpact >= 90) && ratingsBlend >= 82) ratingCap = 96;
+  return Math.round(clampRating(64 + component * 0.32 + gpAdjustment + defensemanBoost + forwardBoost, 70, ratingCap));
 }
 
 function calculateGoalieOverall(stats) {
