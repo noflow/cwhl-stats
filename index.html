@@ -3218,7 +3218,14 @@ function calculateSkaterOverall(stats, playerName = "") {
 
   const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
   const defensemanBoost = defenseShare * (3 + (defenseImpact >= 70 ? 2 : 0) + (defenseImpact >= 85 ? 1 : 0));
-  return Math.round(clampRating(55 + component * 0.44 + gpAdjustment + defensemanBoost, 55, 99));
+  const forwardShare = 1 - defenseShare;
+  const forwardBoost = forwardShare * (
+    2 +
+    (offensiveProduction >= 74 ? 1 : 0) +
+    (offensiveProduction >= 88 ? 1 : 0) +
+    (puck >= 80 ? 0.5 : 0)
+  );
+  return Math.round(clampRating(55 + component * 0.44 + gpAdjustment + defensemanBoost + forwardBoost, 55, 99));
 }
 
 function calculateGoalieOverall(stats) {
