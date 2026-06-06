@@ -541,6 +541,79 @@
     object-fit: contain;
     flex: 0 0 auto;
   }
+  .position-breakdown {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin: 0 0 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--grey2);
+    border-radius: 8px;
+    background: #fff;
+  }
+  .position-chart {
+    position: relative;
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    background: conic-gradient(var(--grey2) 0 100%);
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+  }
+  .position-chart::after {
+    content: "";
+    position: absolute;
+    inset: 26px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
+  }
+  .position-slice-hit {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    clip-path: polygon(50% 50%, var(--x1) var(--y1), var(--x2) var(--y2));
+    cursor: help;
+  }
+  .position-legend {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+  }
+  .position-legend-row {
+    display: grid;
+    grid-template-columns: 12px minmax(34px, auto) auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--grey3);
+  }
+  .position-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .position-legend-pos {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--teal);
+  }
+  .position-legend-count {
+    font-weight: 700;
+    color: var(--black);
+  }
+  @media (max-width: 560px) {
+    .position-breakdown {
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .position-chart {
+      width: 92px;
+      height: 92px;
+    }
+    .position-chart::after { inset: 22px; }
+  }
   .stat-section-title {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 13px;
@@ -2964,6 +3037,92 @@ function statGpValue(stats) {
   return parseStatNumber(stats && stats["GP"]);
 }
 
+const POSITION_CHART_COLORS = ["#10b981", "#ff5a3c", "#2563eb", "#6b3f36", "#f59e0b"];
+
+function positionDisplayLabel(pos) {
+  const short = posShort(pos);
+  if (short === "C") return "Center";
+  if (short === "LW") return "Left Wing";
+  if (short === "RW") return "Right Wing";
+  if (short === "W") return "Wing";
+  if (short === "D") return "Defense";
+  return String(pos || "Unknown");
+}
+
+function positionPoint(angleDeg) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return {
+    x: `${50 + 50 * Math.cos(rad)}%`,
+    y: `${50 + 50 * Math.sin(rad)}%`,
+  };
+}
+
+function buildPositionBreakdown(playerName) {
+  const { rows, headers } = findPlayerRoleRows(playerName, false);
+  if (!rows.length || !headers.length) return [];
+  const idx = getIndexMap(headers);
+  const posIdx = idx["Position"];
+  const gpIdx = idx["GP"];
+  if (posIdx === undefined) return [];
+
+  const counts = new Map();
+  rows.forEach(r => {
+    const raw = String(r[posIdx] || "").trim();
+    const key = posShort(raw) || raw || "UNK";
+    const gp = gpIdx !== undefined ? parseStatNumber(r[gpIdx]) : 1;
+    counts.set(key, {
+      short: key,
+      label: positionDisplayLabel(raw || key),
+      games: (counts.get(key)?.games || 0) + (gp || 0),
+    });
+  });
+  return [...counts.values()]
+    .filter(item => item.games > 0)
+    .sort((a, b) => b.games - a.games);
+}
+
+function renderPositionBreakdown(playerName) {
+  const positions = buildPositionBreakdown(playerName);
+  const total = positions.reduce((sum, item) => sum + item.games, 0);
+  if (!total || positions.length <= 1) return "";
+
+  let cursor = 0;
+  const gradient = positions.map((item, i) => {
+    const start = cursor;
+    const end = cursor + (item.games / total) * 360;
+    cursor = end;
+    return `${POSITION_CHART_COLORS[i % POSITION_CHART_COLORS.length]} ${start}deg ${end}deg`;
+  }).join(", ");
+
+  cursor = 0;
+  const hits = positions.map((item, i) => {
+    const start = cursor;
+    const end = cursor + (item.games / total) * 360;
+    cursor = end;
+    const p1 = positionPoint(start);
+    const p2 = positionPoint(end);
+    const pct = ((item.games / total) * 100).toFixed(1);
+    const title = `${item.label}: ${formatStatNumber(item.games)} games (${pct}%)`;
+    return `<span class="position-slice-hit" style="--x1:${p1.x};--y1:${p1.y};--x2:${p2.x};--y2:${p2.y}" title="${title}"></span>`;
+  }).join("");
+
+  const legend = positions.map((item, i) => {
+    const pct = ((item.games / total) * 100).toFixed(1);
+    const color = POSITION_CHART_COLORS[i % POSITION_CHART_COLORS.length];
+    return `<div class="position-legend-row" title="${item.label}: ${formatStatNumber(item.games)} games (${pct}%)">
+      <span class="position-swatch" style="background:${color}"></span>
+      <span class="position-legend-pos">${item.short}</span>
+      <span class="position-legend-count">${formatStatNumber(item.games)} GP</span>
+    </div>`;
+  }).join("");
+
+  return `<div class="stat-section-title">Positions Played</div>
+    <div class="position-breakdown">
+      <div class="position-chart" style="background: conic-gradient(${gradient})">${hits}</div>
+      <div class="position-legend">${legend}</div>
+    </div>`;
+}
+
 function teamsMatchForCard(rowTeam, wantedTeam) {
   const row = String(rowTeam||"").trim();
   const wanted = String(wantedTeam||"").trim();
@@ -3054,7 +3213,9 @@ function renderPlayerSplitControls(role) {
 function renderPlayerRolePanel(role) {
   const split = activePlayerSplit(role);
   if (!split) return "";
-  return renderPlayerSplitControls(role) + renderPlayerStatSections(split.stats, role === "goalie");
+  const playerName = window._activePlayerCard?.playerName || "";
+  const positionChart = role === "player" ? renderPositionBreakdown(playerName) : "";
+  return renderPlayerSplitControls(role) + positionChart + renderPlayerStatSections(split.stats, role === "goalie");
 }
 
 function setPlayerStatSplit(role, key) {
