@@ -560,8 +560,49 @@
     min-height: 186px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding-left: 10px;
     padding-right: 18px;
+  }
+  .position-summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 220px;
+  }
+  .position-summary-logo {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 3px 5px rgba(0,0,0,0.16));
+  }
+  .position-summary-text {
+    display: grid;
+    gap: 5px;
+  }
+  .position-summary-kicker {
+    color: var(--grey3);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+  }
+  .position-summary-skill {
+    color: var(--teal);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  .position-summary-team {
+    color: var(--black);
+    font-size: 12px;
+    font-weight: 700;
   }
   .position-chart-wrap {
     position: relative;
@@ -648,8 +689,21 @@
       margin-bottom: 18px;
       min-height: 164px;
       padding-right: 0;
+      padding-left: 0;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .position-summary {
+      min-width: 0;
+      width: 100%;
       justify-content: center;
     }
+    .position-summary-logo {
+      width: 54px;
+      height: 54px;
+    }
+    .position-summary-skill { font-size: 18px; }
     .position-chart-wrap { width: 218px; height: 164px; }
     .position-chart {
       left: 54px;
@@ -3266,6 +3320,55 @@ function clearPositionPieHover(chart) {
   chart.removeAttribute("title");
 }
 
+function topSkillLabel(stats, role) {
+  if (!stats) return "Playmaker";
+  if (role === "goalie") return "Goaltending";
+
+  const gp = Math.max(1, statGpValue(stats));
+  const position = posShort(stats["Position"]);
+  const goalsPg = parseStatNumber(stats["G/GP"]) || statPerGame(stats, "G", gp);
+  const assistsPg = parseStatNumber(stats["A/GP"]) || statPerGame(stats, "A", gp);
+  const ptsPg = parseStatNumber(stats["Pts/GP"]) || statPerGame(stats, "PTS", gp);
+  const passPct = parseStatNumber(stats["Pass %"]);
+  const shotsNetPct = parseStatNumber(stats["Shots On Net %"]);
+  const defenseRating = parseStatNumber(stats["Defense Rating"]);
+  const offenseRating = parseStatNumber(stats["Offense Rating"]);
+  const teamplayRating = parseStatNumber(stats["Teamplay Rating"]);
+  const physicalPg = statPerGame(stats, "Hits", gp);
+  const defenseImpact =
+    statPerGame(stats, "Takeaways", gp) +
+    statPerGame(stats, "Blocked Shots", gp) +
+    statPerGame(stats, "Interceptions", gp);
+
+  if (position === "D") {
+    const offensiveDefenseScore = ptsPg * 2.4 + goalsPg * 1.1 + assistsPg * 1.1 + offenseRating / 26;
+    const defensiveDefenseScore = defenseImpact * 1.7 + defenseRating / 22 + physicalPg * 0.45;
+    return offensiveDefenseScore > defensiveDefenseScore ? "Offensive Defenseman" : "Defensive Defenseman";
+  }
+
+  const skills = [
+    { label: "Playmaker", score: assistsPg * 2.35 + passPct / 20 + teamplayRating / 32 },
+    { label: "Sniper", score: goalsPg * 2.75 + shotsNetPct / 22 + offenseRating / 35 },
+    { label: "Two-Way Forward", score: defenseImpact * 1.35 + defenseRating / 24 + ptsPg * 0.65 + teamplayRating / 42 },
+    { label: "Power Forward", score: physicalPg * 1.35 + goalsPg * 0.85 + defenseRating / 44 },
+  ];
+
+  return skills.sort((a, b) => b.score - a.score)[0]?.label || "Playmaker";
+}
+
+function renderPositionSummary(stats, role) {
+  const team = stats?.["Team"] || "";
+  const skill = topSkillLabel(stats, role);
+  return `<div class="position-summary">
+    ${teamLogoImg(team, "position-summary-logo", team)}
+    <div class="position-summary-text">
+      <div class="position-summary-kicker">Top Skill</div>
+      <div class="position-summary-skill">${skill}</div>
+      <div class="position-summary-team">${team}</div>
+    </div>
+  </div>`;
+}
+
 function buildPositionBreakdown(playerName) {
   const counts = new Map();
 
@@ -3305,7 +3408,7 @@ function buildPositionBreakdown(playerName) {
     .sort((a, b) => b.games - a.games);
 }
 
-function renderPositionBreakdown(playerName) {
+function renderPositionBreakdown(playerName, stats, role) {
   const positions = buildPositionBreakdown(playerName);
   const total = positions.reduce((sum, item) => sum + item.games, 0);
   if (!total) return "";
@@ -3344,6 +3447,7 @@ function renderPositionBreakdown(playerName) {
   }).join("");
 
   return `<div class="position-breakdown">
+      ${renderPositionSummary(stats, role)}
       <div class="position-chart-wrap">
         <div class="position-chart" style="background: conic-gradient(${gradient})" data-slices="${escapeAttr(JSON.stringify(slices))}" onmousemove="handlePositionPieMove(event, this)" onmouseleave="clearPositionPieHover(this)">
           <span class="position-hover-dim"></span>
@@ -3464,7 +3568,7 @@ function renderPlayerRolePanel(role) {
   const split = activePlayerSplit(role);
   if (!split) return "";
   const playerName = window._activePlayerCard?.playerName || "";
-  const positionChart = renderPositionBreakdown(playerName);
+  const positionChart = renderPositionBreakdown(playerName, split.stats, role);
   return renderPlayerSplitControls(role) + positionChart + renderPlayerStatSections(split.stats, role === "goalie");
 }
 
