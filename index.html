@@ -556,78 +556,102 @@
     flex: 0 0 auto;
   }
   .position-breakdown {
+    margin: 0 0 18px;
+    min-height: 150px;
     display: flex;
     align-items: center;
-    gap: 18px;
-    margin: 0 0 18px;
-    padding: 14px 16px;
-    border: 1px solid var(--grey2);
-    border-radius: 8px;
-    background: #fff;
+  }
+  .position-chart-wrap {
+    position: relative;
+    width: 250px;
+    height: 150px;
+    flex: 0 0 auto;
   }
   .position-chart {
-    position: relative;
-    width: 112px;
-    height: 112px;
+    position: absolute;
+    left: 62px;
+    top: 14px;
+    width: 122px;
+    height: 122px;
     border-radius: 50%;
     background: conic-gradient(var(--grey2) 0 100%);
-    flex: 0 0 auto;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+    cursor: help;
+    overflow: hidden;
   }
-  .position-chart::after {
-    content: "";
-    position: absolute;
-    inset: 26px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.04);
-  }
-  .position-slice-hit {
+  .position-hover-dim,
+  .position-hover-slice {
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    clip-path: polygon(50% 50%, var(--x1) var(--y1), var(--x2) var(--y2));
-    cursor: help;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
   }
-  .position-slice-hit.full { clip-path: none; }
-  .position-legend {
+  .position-hover-dim {
+    background: rgba(0,0,0,0.34);
+    z-index: 1;
+  }
+  .position-hover-slice {
+    background: conic-gradient(
+      transparent 0deg var(--hover-start, 0deg),
+      var(--hover-color, transparent) var(--hover-start, 0deg) var(--hover-end, 0deg),
+      transparent var(--hover-end, 0deg) 360deg
+    );
+    filter: drop-shadow(0 0 5px rgba(255,255,255,0.35));
+    z-index: 2;
+  }
+  .position-chart.slice-hovered .position-hover-dim,
+  .position-chart.slice-hovered .position-hover-slice { opacity: 1; }
+  .position-label {
+    position: absolute;
+    left: var(--label-x);
+    top: var(--label-y);
+    transform: translate(-50%, -50%);
     display: grid;
-    gap: 7px;
-    min-width: 0;
-  }
-  .position-legend-row {
-    display: grid;
-    grid-template-columns: 12px minmax(34px, auto) auto;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--grey3);
-  }
-  .position-swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-  }
-  .position-legend-pos {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 14px;
-    font-weight: 800;
-    color: var(--teal);
-  }
-  .position-legend-count {
-    font-weight: 700;
+    gap: 1px;
+    min-width: 44px;
     color: var(--black);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+    text-align: center;
+    pointer-events: none;
+  }
+  .position-label.pos-left { text-align: right; }
+  .position-label.pos-right { text-align: left; }
+  .position-label-pos { color: var(--teal); }
+  .position-label-games {
+    color: var(--black);
+    font-size: 11px;
+  }
+  .position-leader {
+    position: absolute;
+    left: var(--line-x);
+    top: var(--line-y);
+    width: var(--line-w);
+    height: 2px;
+    background: var(--line-color);
+    transform-origin: 0 50%;
+    transform: rotate(var(--line-angle));
+    border-radius: 999px;
+    pointer-events: none;
   }
   @media (max-width: 560px) {
     .position-breakdown {
-      align-items: flex-start;
-      gap: 12px;
+      min-height: 134px;
     }
+    .position-chart-wrap { width: 218px; height: 134px; }
     .position-chart {
-      width: 92px;
-      height: 92px;
+      left: 54px;
+      top: 16px;
+      width: 104px;
+      height: 104px;
     }
-    .position-chart::after { inset: 22px; }
+    .position-label { font-size: 11px; min-width: 40px; }
+    .position-label-games { font-size: 10px; }
   }
   .stat-section-title {
     font-family: 'Barlow Condensed', sans-serif;
@@ -3168,6 +3192,14 @@ function positionChartColor(pos) {
   return POSITION_CHART_COLORS[pos] || POSITION_CHART_COLORS.UNK;
 }
 
+function escapeAttr(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function positionDisplayLabel(pos) {
   const short = posShort(pos);
   if (short === "C") return "Center";
@@ -3185,6 +3217,46 @@ function positionPoint(angleDeg) {
     x: `${50 + 50 * Math.cos(rad)}%`,
     y: `${50 + 50 * Math.sin(rad)}%`,
   };
+}
+
+function positionCalloutPoint(angleDeg, radiusX, radiusY) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return {
+    x: `${49.2 + radiusX * Math.cos(rad)}%`,
+    y: `${50 + radiusY * Math.sin(rad)}%`,
+  };
+}
+
+function handlePositionPieMove(event, chart) {
+  const slices = JSON.parse(chart.dataset.slices || "[]");
+  if (!slices.length) return;
+
+  const rect = chart.getBoundingClientRect();
+  const dx = event.clientX - rect.left - rect.width / 2;
+  const dy = event.clientY - rect.top - rect.height / 2;
+  const radius = Math.sqrt(dx * dx + dy * dy);
+  if (radius > rect.width / 2) {
+    clearPositionPieHover(chart);
+    return;
+  }
+
+  const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+  const slice = slices.find(s => angle >= s.start && (angle < s.end || s.end >= 360));
+  if (!slice) {
+    clearPositionPieHover(chart);
+    return;
+  }
+
+  chart.style.setProperty("--hover-start", `${slice.start}deg`);
+  chart.style.setProperty("--hover-end", `${slice.end}deg`);
+  chart.style.setProperty("--hover-color", slice.color);
+  chart.title = slice.title;
+  chart.classList.add("slice-hovered");
+}
+
+function clearPositionPieHover(chart) {
+  chart.classList.remove("slice-hovered");
+  chart.removeAttribute("title");
 }
 
 function buildPositionBreakdown(playerName) {
@@ -3232,40 +3304,47 @@ function renderPositionBreakdown(playerName) {
   if (!total) return "";
 
   let cursor = 0;
+  const slices = [];
   const gradient = positions.map(item => {
     const start = cursor;
     const end = cursor + (item.games / total) * 360;
     cursor = end;
-    return `${positionChartColor(item.short)} ${start}deg ${end}deg`;
+    const pct = ((item.games / total) * 100).toFixed(1);
+    const color = positionChartColor(item.short);
+    const title = `${item.label}: ${formatStatNumber(item.games)} games (${pct}%)`;
+    slices.push({ start, end, color, title });
+    return `${color} ${start}deg ${end}deg`;
   }).join(", ");
 
   cursor = 0;
-  const hits = positions.map(item => {
+  const labels = positions.map(item => {
     const start = cursor;
     const end = cursor + (item.games / total) * 360;
     cursor = end;
-    const p1 = positionPoint(start);
-    const p2 = positionPoint(end);
-    const pct = ((item.games / total) * 100).toFixed(1);
-    const title = `${item.label}: ${formatStatNumber(item.games)} games (${pct}%)`;
-    const fullClass = positions.length === 1 ? " full" : "";
-    return `<span class="position-slice-hit${fullClass}" style="--x1:${p1.x};--y1:${p1.y};--x2:${p2.x};--y2:${p2.y}" title="${title}"></span>`;
-  }).join("");
-
-  const legend = positions.map(item => {
+    const mid = positions.length === 1 ? 90 : start + ((end - start) / 2);
+    const edge = positionCalloutPoint(mid, 25, 41);
+    const label = positionCalloutPoint(mid, 43, 70);
+    const lineAngle = mid - 90;
+    const labelClass = Math.cos((mid - 90) * Math.PI / 180) < 0 ? "pos-left" : "pos-right";
     const pct = ((item.games / total) * 100).toFixed(1);
     const color = positionChartColor(item.short);
-    return `<div class="position-legend-row" title="${item.label}: ${formatStatNumber(item.games)} games (${pct}%)">
-      <span class="position-swatch" style="background:${color}"></span>
-      <span class="position-legend-pos">${item.short}</span>
-      <span class="position-legend-count">${formatStatNumber(item.games)} GP</span>
-    </div>`;
+    return `
+      <span class="position-leader" style="--line-x:${edge.x};--line-y:${edge.y};--line-angle:${lineAngle}deg;--line-w:22px;--line-color:${color}"></span>
+      <span class="position-label ${labelClass}" style="--label-x:${label.x};--label-y:${label.y}">
+        <span class="position-label-pos">${item.short}</span>
+        <span class="position-label-games">${formatStatNumber(item.games)} GP</span>
+      </span>`;
   }).join("");
 
   return `<div class="stat-section-title">Positions Played</div>
     <div class="position-breakdown">
-      <div class="position-chart" style="background: conic-gradient(${gradient})">${hits}</div>
-      <div class="position-legend">${legend}</div>
+      <div class="position-chart-wrap">
+        <div class="position-chart" style="background: conic-gradient(${gradient})" data-slices="${escapeAttr(JSON.stringify(slices))}" onmousemove="handlePositionPieMove(event, this)" onmouseleave="clearPositionPieHover(this)">
+          <span class="position-hover-dim"></span>
+          <span class="position-hover-slice"></span>
+        </div>
+        ${labels}
+      </div>
     </div>`;
 }
 
