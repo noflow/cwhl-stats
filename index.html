@@ -3182,7 +3182,7 @@ function calculateSkaterOverall(stats, playerName = "") {
   const giveawaysPg = statPerGame(stats, "Giveaways", gp);
   const giveawayControl = clampRating(100 - scaleScore(giveawaysPg, 7));
   const plusMinusScore = clampRating(((plusPerGame + 1.0) / 4.0) * 100);
-  const defenseImpact = clampRating(
+  const standardDefenseImpact = clampRating(
     scaleScore(takeawaysPg, 3.4) * 0.28 +
     scaleScore(blocksPg, 2.1) * 0.20 +
     scaleScore(interceptionsPg, 2.3) * 0.18 +
@@ -3191,6 +3191,16 @@ function calculateSkaterOverall(stats, playerName = "") {
     plusMinusScore * 0.10 +
     giveawayControl * 0.06
   );
+  const defensemanDefenseImpact = clampRating(
+    scaleScore(takeawaysPg, 3.2) * 0.36 +
+    scaleScore(interceptionsPg, 2.4) * 0.26 +
+    scaleScore(blocksPg, 2.0) * 0.17 +
+    scaleScore(deflectionsPg, 1.5) * 0.07 +
+    scaleScore(pkClearsPg, 1.5) * 0.08 +
+    plusMinusScore * 0.04 +
+    giveawayControl * 0.02
+  );
+  const defenseImpact = standardDefenseImpact * (1 - defenseShare) + defensemanDefenseImpact * defenseShare;
 
   const physical = clampRating(
     scaleScore(statPerGame(stats, "Hits", gp), 10) * 0.78 +
@@ -3212,12 +3222,17 @@ function calculateSkaterOverall(stats, playerName = "") {
     statScore(stats, "Teamplay Rating") * 0.30
   );
 
-  const defenseComponent = offensiveProduction * 0.16 + defenseImpact * 0.28 + ratingsBlend * 0.26 + puck * 0.10 + physical * 0.12 + discipline * 0.08;
+  const defenseComponent = offensiveProduction * 0.14 + defenseImpact * 0.34 + ratingsBlend * 0.22 + puck * 0.09 + physical * 0.12 + discipline * 0.09;
   const forwardComponent = offensiveProduction * 0.28 + defenseImpact * 0.18 + ratingsBlend * 0.24 + puck * 0.12 + physical * 0.10 + discipline * 0.08;
   const component = defenseComponent * defenseShare + forwardComponent * (1 - defenseShare);
 
   const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
-  const defensemanBoost = defenseShare * (3 + (defenseImpact >= 70 ? 2 : 0) + (defenseImpact >= 85 ? 1 : 0));
+  const defensemanBoost = defenseShare * (
+    2 +
+    scaleScore(defensemanDefenseImpact, 100) * 4 +
+    (takeawaysPg >= 3 ? 0.75 : 0) +
+    (interceptionsPg >= 2 ? 0.75 : 0)
+  );
   const forwardShare = 1 - defenseShare;
   const forwardBoost = forwardShare * (
     2 +
