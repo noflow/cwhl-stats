@@ -3138,6 +3138,7 @@ function scaleScore(value, eliteTarget) {
 
 function calculateSkaterOverall(stats) {
   const gp = Math.max(1, statGpValue(stats));
+  const position = posShort(stats["Position"]);
   const ptsPerGame = parseStatNumber(stats["Pts/GP"]) || statPerGame(stats, "PTS", gp);
   const goalsPerGame = parseStatNumber(stats["G/GP"]) || statPerGame(stats, "G", gp);
   const assistsPerGame = parseStatNumber(stats["A/GP"]) || statPerGame(stats, "A", gp);
@@ -3146,28 +3147,67 @@ function calculateSkaterOverall(stats) {
   const scoring = scaleScore(ptsPerGame, 4.25);
   const goals = scaleScore(goalsPerGame, 2.2);
   const assists = scaleScore(assistsPerGame, 2.8);
-  const physical = scaleScore(statPerGame(stats, "Hits", gp), 10);
-  const puck = clampRating(
-    (scaleScore(parseStatNumber(stats["Pass %"]), 86) * 0.7) +
-    (scaleScore(parseStatNumber(stats["Shots On Net %"]), 70) * 0.3)
+  const specialTeams = scaleScore(
+    statPerGame(stats, "PPG", gp) +
+    statPerGame(stats, "SHG", gp) +
+    statPerGame(stats, "GWGs", gp),
+    0.9
   );
-  const defenseImpact = clampRating(
-    (scaleScore(statPerGame(stats, "Takeaways", gp), 2.5) * 0.36) +
-    (scaleScore(statPerGame(stats, "Blocked Shots", gp), 1.8) * 0.24) +
-    (scaleScore(statPerGame(stats, "Interceptions", gp), 2.0) * 0.18) +
-    (clampRating(((plusPerGame + 1.0) / 4.0) * 100) * 0.22)
+  const shooting = clampRating(
+    scaleScore(parseStatNumber(stats["Shots On Net %"]), 72) * 0.58 +
+    scaleScore(parseStatNumber(stats["EV Sh%"]), 35) * 0.22 +
+    scaleScore(statPerGame(stats, "Shots", gp), 6.5) * 0.20
+  );
+  const offensiveProduction = clampRating(
+    scoring * 0.36 +
+    goals * 0.18 +
+    assists * 0.18 +
+    shooting * 0.16 +
+    specialTeams * 0.12
   );
 
-  const component =
-    scoring * 0.24 +
-    goals * 0.08 +
-    assists * 0.08 +
-    statScore(stats, "Offense Rating") * 0.16 +
-    statScore(stats, "Defense Rating") * 0.14 +
-    statScore(stats, "Teamplay Rating") * 0.12 +
-    defenseImpact * 0.10 +
-    puck * 0.05 +
-    physical * 0.03;
+  const takeawaysPg = statPerGame(stats, "Takeaways", gp);
+  const blocksPg = statPerGame(stats, "Blocked Shots", gp);
+  const interceptionsPg = statPerGame(stats, "Interceptions", gp);
+  const deflectionsPg = statPerGame(stats, "Deflections", gp);
+  const pkClearsPg = statPerGame(stats, "PK Zone Clears", gp);
+  const giveawaysPg = statPerGame(stats, "Giveaways", gp);
+  const giveawayControl = clampRating(100 - scaleScore(giveawaysPg, 7));
+  const plusMinusScore = clampRating(((plusPerGame + 1.0) / 4.0) * 100);
+  const defenseImpact = clampRating(
+    scaleScore(takeawaysPg, 3.4) * 0.28 +
+    scaleScore(blocksPg, 2.1) * 0.20 +
+    scaleScore(interceptionsPg, 2.3) * 0.18 +
+    scaleScore(deflectionsPg, 1.6) * 0.08 +
+    scaleScore(pkClearsPg, 1.6) * 0.10 +
+    plusMinusScore * 0.10 +
+    giveawayControl * 0.06
+  );
+
+  const physical = clampRating(
+    scaleScore(statPerGame(stats, "Hits", gp), 10) * 0.78 +
+    scaleScore(statPerGame(stats, "Penalties Drawn", gp), 1.1) * 0.22
+  );
+  const puck = clampRating(
+    scaleScore(parseStatNumber(stats["Pass %"]), 86) * 0.54 +
+    scaleScore(parseStatNumber(stats["Shots On Net %"]), 72) * 0.20 +
+    scaleScore(parseStatNumber(stats["Faceoff %"]), 62) * 0.12 +
+    scaleScore(statPerGame(stats, "Possession (mins)", gp), 2.4) * 0.14
+  );
+  const discipline = clampRating(
+    (100 - scaleScore(statPerGame(stats, "PIMs", gp), 3.2)) * 0.70 +
+    scaleScore(statPerGame(stats, "Penalties Drawn", gp), 1.1) * 0.30
+  );
+  const ratingsBlend = clampRating(
+    statScore(stats, "Offense Rating") * 0.34 +
+    statScore(stats, "Defense Rating") * 0.36 +
+    statScore(stats, "Teamplay Rating") * 0.30
+  );
+
+  const isDefense = position === "D";
+  const component = isDefense
+    ? offensiveProduction * 0.16 + defenseImpact * 0.28 + ratingsBlend * 0.26 + puck * 0.10 + physical * 0.12 + discipline * 0.08
+    : offensiveProduction * 0.28 + defenseImpact * 0.18 + ratingsBlend * 0.24 + puck * 0.12 + physical * 0.10 + discipline * 0.08;
 
   const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
   return Math.round(clampRating(55 + component * 0.44 + gpAdjustment, 55, 99));
