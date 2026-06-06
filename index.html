@@ -556,8 +556,8 @@
     flex: 0 0 auto;
   }
   .position-breakdown {
-    margin: 0 0 18px;
-    min-height: 186px;
+    margin: 0 0 12px;
+    min-height: 126px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -606,14 +606,14 @@
   }
   .position-chart-wrap {
     position: relative;
-    width: 250px;
-    height: 186px;
+    width: 150px;
+    height: 126px;
     flex: 0 0 auto;
   }
   .position-chart {
     position: absolute;
-    left: 62px;
-    top: 32px;
+    left: 15px;
+    top: 4px;
     width: 122px;
     height: 122px;
     border-radius: 50%;
@@ -646,48 +646,28 @@
   }
   .position-chart.slice-hovered .position-hover-dim,
   .position-chart.slice-hovered .position-hover-slice { opacity: 1; }
-  .position-label {
+  .position-center-label {
     position: absolute;
-    left: var(--label-x);
-    top: var(--label-y);
+    left: 50%;
+    top: 50%;
     transform: translate(-50%, -50%);
-    display: grid;
-    gap: 4px;
-    min-width: 56px;
-    color: var(--black);
+    z-index: 3;
+    color: #fff;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 900;
-    line-height: 1.08;
+    letter-spacing: 0.8px;
+    line-height: 1;
     text-transform: uppercase;
     text-align: center;
-    pointer-events: none;
-  }
-  .position-label.pos-left { text-align: right; }
-  .position-label.pos-right { text-align: left; }
-  .position-label-pos { color: var(--teal); }
-  .position-label-games {
-    color: var(--black);
-    font-size: 11px;
-    white-space: nowrap;
-  }
-  .position-leader {
-    position: absolute;
-    left: var(--line-x);
-    top: var(--line-y);
-    width: var(--line-w);
-    height: 2px;
-    background: var(--line-color);
-    transform-origin: 0 50%;
-    transform: rotate(var(--line-angle));
-    border-radius: 999px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.72);
     pointer-events: none;
   }
   @media (max-width: 560px) {
     .position-breakdown {
       margin-top: 0;
-      margin-bottom: 18px;
-      min-height: 164px;
+      margin-bottom: 14px;
+      min-height: 178px;
       padding-right: 0;
       padding-left: 0;
       justify-content: center;
@@ -704,15 +684,14 @@
       height: 54px;
     }
     .position-summary-skill { font-size: 18px; }
-    .position-chart-wrap { width: 218px; height: 164px; }
+    .position-chart-wrap { width: 128px; height: 112px; }
     .position-chart {
-      left: 54px;
-      top: 30px;
+      left: 14px;
+      top: 6px;
       width: 104px;
       height: 104px;
     }
-    .position-label { font-size: 11px; min-width: 50px; gap: 3px; }
-    .position-label-games { font-size: 10px; }
+    .position-center-label { font-size: 12px; }
   }
   .stat-section-title {
     font-family: 'Barlow Condensed', sans-serif;
@@ -3272,22 +3251,6 @@ function positionDisplayLabel(pos) {
   return String(pos || "Unknown");
 }
 
-function positionPoint(angleDeg) {
-  const rad = (angleDeg - 90) * Math.PI / 180;
-  return {
-    x: `${50 + 50 * Math.cos(rad)}%`,
-    y: `${50 + 50 * Math.sin(rad)}%`,
-  };
-}
-
-function positionCalloutPoint(angleDeg, radiusX, radiusY) {
-  const rad = (angleDeg - 90) * Math.PI / 180;
-  return {
-    x: `${49.2 + radiusX * Math.cos(rad)}%`,
-    y: `${50 + radiusY * Math.sin(rad)}%`,
-  };
-}
-
 function handlePositionPieMove(event, chart) {
   const slices = JSON.parse(chart.dataset.slices || "[]");
   if (!slices.length) return;
@@ -3341,16 +3304,17 @@ function topSkillLabel(stats, role) {
     statPerGame(stats, "Interceptions", gp);
 
   if (position === "D") {
-    const offensiveDefenseScore = ptsPg * 2.4 + goalsPg * 1.1 + assistsPg * 1.1 + offenseRating / 26;
-    const defensiveDefenseScore = defenseImpact * 1.7 + defenseRating / 22 + physicalPg * 0.45;
-    return offensiveDefenseScore > defensiveDefenseScore ? "Offensive Defenseman" : "Defensive Defenseman";
+    const offensiveDefenseScore = ptsPg * 3.25 + goalsPg * 1.4 + assistsPg * 1.25 + offenseRating / 24;
+    const defensiveDefenseScore = defenseImpact * 1.55 + defenseRating / 20 + physicalPg * 0.45;
+    return offensiveDefenseScore >= defensiveDefenseScore ? "Offensive Defensemen" : "Defensive Defensemen";
   }
 
+  const twoWayEligible = defenseRating >= 74 && defenseImpact >= 1.6;
   const skills = [
-    { label: "Playmaker", score: assistsPg * 2.35 + passPct / 20 + teamplayRating / 32 },
-    { label: "Sniper", score: goalsPg * 2.75 + shotsNetPct / 22 + offenseRating / 35 },
-    { label: "Two-Way Forward", score: defenseImpact * 1.35 + defenseRating / 24 + ptsPg * 0.65 + teamplayRating / 42 },
-    { label: "Power Forward", score: physicalPg * 1.35 + goalsPg * 0.85 + defenseRating / 44 },
+    { label: "Playmaker", score: assistsPg * 2.8 + passPct / 18 + teamplayRating / 30 },
+    { label: "Sniper", score: goalsPg * 3.15 + shotsNetPct / 20 + offenseRating / 32 },
+    { label: "Two-Way Forward", score: twoWayEligible ? defenseImpact * 1.65 + defenseRating / 18 + ptsPg * 0.45 + teamplayRating / 45 : -1 },
+    { label: "Power Forward", score: physicalPg * 1.45 + goalsPg * 0.95 + defenseRating / 52 },
   ];
 
   return skills.sort((a, b) => b.score - a.score)[0]?.label || "Playmaker";
@@ -3426,25 +3390,7 @@ function renderPositionBreakdown(playerName, stats, role) {
     return `${color} ${start}deg ${end}deg`;
   }).join(", ");
 
-  cursor = 0;
-  const labels = positions.map(item => {
-    const start = cursor;
-    const end = cursor + (item.games / total) * 360;
-    cursor = end;
-    const mid = positions.length === 1 ? 90 : start + ((end - start) / 2);
-    const edge = positionCalloutPoint(mid, 25, 36);
-    const label = positionCalloutPoint(mid, 38, 49);
-    const lineAngle = mid - 90;
-    const labelClass = Math.cos((mid - 90) * Math.PI / 180) < 0 ? "pos-left" : "pos-right";
-    const pct = ((item.games / total) * 100).toFixed(1);
-    const color = positionChartColor(item.short);
-    return `
-      <span class="position-leader" style="--line-x:${edge.x};--line-y:${edge.y};--line-angle:${lineAngle}deg;--line-w:16px;--line-color:${color}"></span>
-      <span class="position-label ${labelClass}" style="--label-x:${label.x};--label-y:${label.y}">
-        <span class="position-label-pos">${item.short}</span>
-        <span class="position-label-games">${formatStatNumber(item.games)} GP</span>
-      </span>`;
-  }).join("");
+  const centerLabel = positions.map(item => item.short).join(" / ");
 
   return `<div class="position-breakdown">
       ${renderPositionSummary(stats, role)}
@@ -3452,8 +3398,8 @@ function renderPositionBreakdown(playerName, stats, role) {
         <div class="position-chart" style="background: conic-gradient(${gradient})" data-slices="${escapeAttr(JSON.stringify(slices))}" onmousemove="handlePositionPieMove(event, this)" onmouseleave="clearPositionPieHover(this)">
           <span class="position-hover-dim"></span>
           <span class="position-hover-slice"></span>
+          <span class="position-center-label">${centerLabel}</span>
         </div>
-        ${labels}
       </div>
     </div>`;
 }
