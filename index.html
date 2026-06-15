@@ -1611,6 +1611,7 @@ async function fetchScheduleTab(tabName) {
 async function fetchScheduleSettings(tabName) {
   const data = await fetchScheduleTab(tabName);
   const settings = {};
+  settings._rows = data.rows;
   data.rows.forEach(r => {
     const key = String(r[0]||"").trim();
     const val = String(r[1]||"").trim();
@@ -1620,6 +1621,18 @@ async function fetchScheduleSettings(tabName) {
     }
   });
   return settings;
+}
+
+function settingValue(settings = {}, keyName) {
+  const normalized = normalizeConfigKey(keyName);
+  if (settings[normalized] !== undefined) return settings[normalized];
+  if (settings[keyName] !== undefined) return settings[keyName];
+  const rows = settings._rows || [];
+  for (const row of rows) {
+    const key = normalizeConfigKey(row[0]);
+    if (key === normalized) return String(row[1] || "").trim();
+  }
+  return "";
 }
 
 function websiteSeasonFromRow(row, idx) {
@@ -2629,7 +2642,7 @@ function disabledSetting(v) {
 }
 
 function bracketIsEnabled(settings = {}) {
-  return truthySetting(settings.bracket_enabled);
+  return truthySetting(settingValue(settings, "bracket_enabled"));
 }
 
 function setBracketNavVisible(visible) {
@@ -2644,7 +2657,7 @@ function setBracketNavVisible(visible) {
 
 function applyPlayoffStatsVisibility(settings = {}) {
   playoffRuntimeSettings = settings || {};
-  playoffStatsEnabled = truthySetting(playoffRuntimeSettings.playoff_stats_enabled) && !!playoffPublishSheetId();
+  playoffStatsEnabled = truthySetting(settingValue(playoffRuntimeSettings, "playoff_stats_enabled")) && !!playoffPublishSheetId();
 
   const controls = [
     document.getElementById("player-season-label"),
@@ -2681,6 +2694,7 @@ async function refreshBracketVisibility() {
   try {
     const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
     applyPlayoffStatsVisibility(settings);
+    console.log("Playoff bracket setting:", settingValue(settings, "bracket_enabled"), settings);
     setBracketNavVisible(bracketIsEnabled(settings));
   } catch(e) {
     console.warn("Could not read playoff bracket settings; hiding bracket tab.", e);
@@ -2692,7 +2706,7 @@ async function refreshBracketVisibility() {
 function startBracketVisibilityWatcher() {
   setInterval(() => {
     refreshBracketVisibility();
-  }, 15000);
+  }, 5000);
 }
 
 async function loadPlayoffBracket() {
