@@ -2621,6 +2621,10 @@ function truthySetting(v) {
   return ["yes","true","on","1","enabled"].includes(String(v||"").trim().toLowerCase());
 }
 
+function disabledSetting(v) {
+  return ["no","false","off","0","disabled","hide","hidden"].includes(String(v||"").trim().toLowerCase());
+}
+
 function applyPlayoffStatsVisibility(settings = {}) {
   playoffRuntimeSettings = settings || {};
   playoffStatsEnabled = truthySetting(playoffRuntimeSettings.playoff_stats_enabled) && !!playoffPublishSheetId();
@@ -2661,7 +2665,7 @@ async function refreshBracketVisibility() {
   try {
     const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
     applyPlayoffStatsVisibility(settings);
-    btn.style.display = truthySetting(settings.bracket_enabled) ? "" : "none";
+    btn.style.display = disabledSetting(settings.bracket_enabled) ? "none" : "";
   } catch(e) {
     console.warn("Could not read playoff bracket settings; keeping bracket tab visible.", e);
     applyPlayoffStatsVisibility({});
@@ -2673,7 +2677,7 @@ async function loadPlayoffBracket() {
   const target = document.getElementById("bracket-content");
   try {
     const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
-    if (!truthySetting(settings.bracket_enabled)) {
+    if (disabledSetting(settings.bracket_enabled)) {
       target.innerHTML = `<div class="loading">Playoff bracket is turned off in Playoff Bracket Settings.</div>`;
       return;
     }
