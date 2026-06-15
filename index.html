@@ -1614,7 +1614,10 @@ async function fetchScheduleSettings(tabName) {
   data.rows.forEach(r => {
     const key = String(r[0]||"").trim();
     const val = String(r[1]||"").trim();
-    if (key) settings[key] = val;
+    if (key) {
+      settings[key] = val;
+      settings[normalizeConfigKey(key)] = val;
+    }
   });
   return settings;
 }
@@ -2684,7 +2687,7 @@ async function loadPlayoffBracket() {
     const data = await fetchScheduleTab(bracketTabForSelectedSeason());
     renderPlayoffBracket(data, settings);
     playoffBracketLoaded = true;
-    document.getElementById("bracket-nav-btn").style.display = "";
+    document.getElementById("bracket-nav-btn").style.display = disabledSetting(settings.bracket_enabled) ? "none" : "";
   } catch(e) {
     target.innerHTML = `<div class="loading">Could not load playoff bracket: ${e.message}</div>`;
   }
