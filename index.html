@@ -2689,6 +2689,12 @@ async function refreshBracketVisibility() {
   }
 }
 
+function startBracketVisibilityWatcher() {
+  setInterval(() => {
+    refreshBracketVisibility();
+  }, 15000);
+}
+
 async function loadPlayoffBracket() {
   const target = document.getElementById("bracket-content");
   try {
@@ -4171,6 +4177,14 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape") setMobileMenuOpen(false);
 });
 
+window.addEventListener("focus", () => {
+  refreshBracketVisibility();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshBracketVisibility();
+});
+
 // Make a player-name cell clickable
 function makeClickable(name, rowData, headers, isGoalie, season = "regular") {
   return `<td class="player-name clickable" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie}, ${JSON.stringify(season)})'>${name}</td>`;
@@ -4199,6 +4213,7 @@ function restoreTab() {
 async function initSite() {
   await loadWebsiteSeasons();
   await refreshBracketVisibility();
+  startBracketVisibilityWatcher();
   await loadStandings();
   await loadPlayers();
   await loadGoalies();
