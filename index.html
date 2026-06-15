@@ -1263,7 +1263,7 @@
     <button id="playoff-goalie-nav-btn" style="display:none" onclick="showStatsSeason('goalies', 'playoffs', this)">Playoff Goalie Stats</button>
     <button onclick="showPage('teams', this)">Teams</button>
     <button onclick="showPage('schedule', this)">Schedule</button>
-    <button id="bracket-nav-btn" onclick="showPage('bracket', this)">Playoff Bracket</button>
+    <button id="bracket-nav-btn" style="display:none" onclick="showPage('bracket', this)">Playoff Bracket</button>
     <button onclick="showPage('games', this)">Recent Games</button>
   </nav>
 </header>
@@ -2628,6 +2628,20 @@ function disabledSetting(v) {
   return ["no","false","off","0","disabled","hide","hidden"].includes(String(v||"").trim().toLowerCase());
 }
 
+function bracketIsEnabled(settings = {}) {
+  return truthySetting(settings.bracket_enabled);
+}
+
+function setBracketNavVisible(visible) {
+  const btn = document.getElementById("bracket-nav-btn");
+  if (btn) btn.style.display = visible ? "" : "none";
+  const bracketPage = document.getElementById("page-bracket");
+  if (!visible && bracketPage?.classList.contains("active")) {
+    const standingsBtn = document.querySelector(`nav button[onclick*="'standings'"]`);
+    showPage("standings", standingsBtn);
+  }
+}
+
 function applyPlayoffStatsVisibility(settings = {}) {
   playoffRuntimeSettings = settings || {};
   playoffStatsEnabled = truthySetting(playoffRuntimeSettings.playoff_stats_enabled) && !!playoffPublishSheetId();
@@ -2659,20 +2673,19 @@ function applyPlayoffStatsVisibility(settings = {}) {
 }
 
 async function refreshBracketVisibility() {
-  const btn = document.getElementById("bracket-nav-btn");
   if (!scheduleSheetIdForSelectedSeason()) {
-    btn.style.display = "none";
+    setBracketNavVisible(false);
     applyPlayoffStatsVisibility({});
     return;
   }
   try {
     const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
     applyPlayoffStatsVisibility(settings);
-    btn.style.display = disabledSetting(settings.bracket_enabled) ? "none" : "";
+    setBracketNavVisible(bracketIsEnabled(settings));
   } catch(e) {
-    console.warn("Could not read playoff bracket settings; keeping bracket tab visible.", e);
+    console.warn("Could not read playoff bracket settings; hiding bracket tab.", e);
     applyPlayoffStatsVisibility({});
-    btn.style.display = "";
+    setBracketNavVisible(false);
   }
 }
 
@@ -2680,14 +2693,15 @@ async function loadPlayoffBracket() {
   const target = document.getElementById("bracket-content");
   try {
     const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
-    if (disabledSetting(settings.bracket_enabled)) {
+    if (!bracketIsEnabled(settings)) {
       target.innerHTML = `<div class="loading">Playoff bracket is turned off in Playoff Bracket Settings.</div>`;
+      setBracketNavVisible(false);
       return;
     }
     const data = await fetchScheduleTab(bracketTabForSelectedSeason());
     renderPlayoffBracket(data, settings);
     playoffBracketLoaded = true;
-    document.getElementById("bracket-nav-btn").style.display = disabledSetting(settings.bracket_enabled) ? "none" : "";
+    setBracketNavVisible(true);
   } catch(e) {
     target.innerHTML = `<div class="loading">Could not load playoff bracket: ${e.message}</div>`;
   }
