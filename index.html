@@ -1212,6 +1212,21 @@
     color: #fff;
     text-align: right;
   }
+  .bracket-series-meta {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.78);
+    text-align: center;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+  }
+  .bracket-series-games {
+    font-size: 10px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 2px;
+    word-break: break-word;
+  }
   .bracket-finals {
     display: flex;
     flex-direction: column;
@@ -1282,6 +1297,11 @@
       <select class="pos-filter" id="team-filter" onchange="filterPlayers()">
         <option value="">All Teams</option>
       </select>
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter" id="player-season-filter" onchange="changePlayerSeason()">
+        <option value="regular">Regular</option>
+        <option value="playoffs">Playoffs</option>
+      </select>
       <span class="record-count" id="player-count"></span>
     </div>
     <div class="table-wrap" id="player-table-wrap">
@@ -1297,6 +1317,11 @@
         <span class="search-icon">&#128269;</span>
         <input type="text" id="goalie-search" placeholder="Search goalie..." oninput="filterGoalies()">
       </div>
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter" id="goalie-season-filter" onchange="changeGoalieSeason()">
+        <option value="regular">Regular</option>
+        <option value="playoffs">Playoffs</option>
+      </select>
       <span class="record-count" id="goalie-count"></span>
     </div>
     <div class="table-wrap" id="goalie-table-wrap">
@@ -1365,6 +1390,7 @@
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Your publish sheet ID — the one stats_publisher.py writes to
 const SHEET_ID        = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I"; // publish sheet
+const PLAYOFF_SHEET_ID = ""; // optional separate playoff publish sheet
 const SOURCE_SHEET_ID = "1KfHr5l2ms5d6dfgaDDACZVNymolxJw5ZSNfGkSlwPxU"; // scraper sheet (Game/Skater/Goalie Log)
 const SCHEDULE_SHEET_ID = "1AJhDuXAi4cnXCnrtvUXc7rwv3d2O8_Iu4JS86WnoxbQ"; // CWHL Schedule sheet
 
@@ -1387,10 +1413,15 @@ const TEAMS = [
 ];
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
-async function fetchTab(tabName) {
+function publishSheetIdForSeason(season) {
+  return season === "playoffs" ? PLAYOFF_SHEET_ID : SHEET_ID;
+}
+
+async function fetchTab(tabName, sheetId = SHEET_ID) {
   // headers=1 tells gviz the first row IS the header — it returns col labels
   // AND all data rows separately, so we get clean header + data split
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1&cb=${Date.now()}`;
+  if (!sheetId) throw new Error("This stats sheet ID has not been added to the website yet.");
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
@@ -1627,6 +1658,8 @@ async function loadStandings() {
 
 // ── PLAYER STATS ──────────────────────────────────────────────────────────────
 let playerData = { cols: [], rows: [] };
+let playoffPlayerData = { cols: [], rows: [] };
+let activePlayerSeason = "regular";
 
 function posGroup(pos) {
   const p = String(pos).toLowerCase();
@@ -1651,14 +1684,19 @@ function posShort(pos) {
 
 async function loadPlayers() {
   try {
-    const raw = await fetchTab("Player Stats");
+    const seasonSel = document.getElementById("player-season-filter");
+    activePlayerSeason = seasonSel ? seasonSel.value : "regular";
+    const raw = await fetchTab("Player Stats", publishSheetIdForSeason(activePlayerSeason));
     // cols come from gviz col labels (row 1 of sheet), rows are data only
-    playerData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols };
+    const targetData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols, season: activePlayerSeason };
+    if (activePlayerSeason === "playoffs") playoffPlayerData = targetData;
+    else playerData = targetData;
     try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Current-team mapping unavailable for player totals", e); }
-    const idx = getIndexMap(playerData.cols);
+    const displayData = activePlayerSeason === "playoffs" ? playoffPlayerData : playerData;
+    const idx = getIndexMap(displayData.cols);
     const teamIdx = idx["Team"] ?? 2;
     const teams = new Map();
-    buildLeaguePlayerRows(playerData.rows, playerData.cols, false).forEach(r => {
+    buildLeaguePlayerRows(displayData.rows, displayData.cols, false).forEach(r => {
       const rawTeam = String(r[teamIdx]||"").trim();
       const abbr = nameToAbbr(cleanTeamName(rawTeam));
       if (abbr) teams.set(abbr, displayTeamName(rawTeam));
@@ -1672,7 +1710,7 @@ async function loadPlayers() {
       sel.appendChild(o);
     });
     // Set default sort to PTS column by name
-    const ptsIdx = playerData.cols.findIndex(h => h.trim() === "PTS");
+    const ptsIdx = displayData.cols.findIndex(h => h.trim() === "PTS");
     if (ptsIdx !== -1) sortState.players.col = ptsIdx;
     renderPlayers();
   } catch(e) {
@@ -1681,6 +1719,9 @@ async function loadPlayers() {
 }
 
 function filterPlayers() { renderPlayers(); }
+function changePlayerSeason() {
+  loadPlayers();
+}
 
 function buildLeaguePlayerRows(rows, headers, isGoalie) {
   const idx = getIndexMap(headers);
@@ -1717,8 +1758,9 @@ function renderPlayers() {
   const search = document.getElementById("player-search").value.trim().toLowerCase();
   const posFil = document.getElementById("pos-filter").value;
   const teamFil = document.getElementById("team-filter").value;
-  const cols = playerData.cols;
-  const rows = buildLeaguePlayerRows(playerData.rows, playerData.cols, false);
+  const data = activePlayerSeason === "playoffs" ? playoffPlayerData : playerData;
+  const cols = data.cols;
+  const rows = buildLeaguePlayerRows(data.rows, data.cols, false);
   if (!cols.length) return;
   const idx = getIndexMap(cols);
   const nameIdx = idx["Username"] ?? 1;
@@ -1750,7 +1792,7 @@ function renderPlayers() {
 
   document.getElementById("player-count").textContent = `${filtered.length} players`;
 
-  const hdrs = playerData.cols;
+  const hdrs = data.cols;
 
   // Columns hidden from main table — only shown on player card
   // Hidden: W, L, OTL (card Record section), EV Sh%, EVO, GAR, WAR (card Advanced section)
@@ -1777,7 +1819,7 @@ function renderPlayers() {
     const cells = displayColIdxs.map(origIdx => {
       const v = String(r[origIdx] || "").trim() || "-";
       const colName = String(hdrs[origIdx] || "").trim();
-      if (colName === "Username") return makeClickable(r[origIdx] || "-", r, playerData.cols, false);
+      if (colName === "Username") return makeClickable(r[origIdx] || "-", r, data.cols, false, activePlayerSeason);
       if (colName === "Team") return `<td><span class="team-badge">${v}</span></td>`;
       if (colName === "Position") return `<td><span class="pos-badge">${posShort(r[origIdx])}</span></td>`;
       if (origIdx === ptsColIdx) return `<td class="pts-cell">${v}</td>`;
@@ -1795,12 +1837,18 @@ function renderPlayers() {
 
 // ── GOALIE STATS ──────────────────────────────────────────────────────────────
 let goalieData = { cols: [], rows: [] };
+let playoffGoalieData = { cols: [], rows: [] };
+let activeGoalieSeason = "regular";
 
 async function loadGoalies() {
   try {
-    const rawG = await fetchTab("Goalie Stats");
-    goalieData = { cols: rawG.cols, rows: rawG.rows, numCols: rawG.numCols };
-    const svIdx = goalieData.cols.findIndex(h => h.trim() === "Save %");
+    const seasonSel = document.getElementById("goalie-season-filter");
+    activeGoalieSeason = seasonSel ? seasonSel.value : "regular";
+    const rawG = await fetchTab("Goalie Stats", publishSheetIdForSeason(activeGoalieSeason));
+    const targetData = { cols: rawG.cols, rows: rawG.rows, numCols: rawG.numCols, season: activeGoalieSeason };
+    if (activeGoalieSeason === "playoffs") playoffGoalieData = targetData;
+    else goalieData = targetData;
+    const svIdx = targetData.cols.findIndex(h => h.trim() === "Save %");
     if (svIdx !== -1) sortState.goalies.col = svIdx;
     renderGoalies();
   } catch(e) {
@@ -1809,11 +1857,15 @@ async function loadGoalies() {
 }
 
 function filterGoalies() { renderGoalies(); }
+function changeGoalieSeason() {
+  loadGoalies();
+}
 
 function renderGoalies() {
   const search = document.getElementById("goalie-search").value.toLowerCase();
-  const cols = goalieData.cols;
-  const rows = goalieData.rows;
+  const data = activeGoalieSeason === "playoffs" ? playoffGoalieData : goalieData;
+  const cols = data.cols;
+  const rows = data.rows;
   if (!cols.length) return;
 
   let filtered = rows.filter(r => {
@@ -1831,7 +1883,7 @@ function renderGoalies() {
 
   document.getElementById("goalie-count").textContent = `${filtered.length} goalies`;
 
-  const gHdrs = goalieData.cols;
+  const gHdrs = data.cols;
   const headers = gHdrs.slice(1).map((c, i) => {
     const colIdx = i + 1;
     const ss = sortState.goalies;
@@ -1842,7 +1894,7 @@ function renderGoalies() {
   const bodyRows = filtered.map((r, rank) => {
     const cells = r.slice(1).map((v, i) => {
       const colIdx = i + 1;
-      if (colIdx === 1) return makeClickable(v || "-", r, goalieData.cols, true);
+      if (colIdx === 1) return makeClickable(v || "-", r, data.cols, true, activeGoalieSeason);
       if (colIdx === 2) return `<td><span class="team-badge">${v || "-"}</span></td>`;
       if (colIdx === 10) return `<td class="pts-cell">${v || "-"}</td>`;
       return `<td>${v !== null && v !== "" ? v : "-"}</td>`;
@@ -2406,24 +2458,30 @@ async function loadPlayoffBracket() {
 }
 
 function bracketRoundsFor(sideRows) {
-  const order = ["Round 1", "Round 2", "Conference Final", "Final"];
+  const order = ["Round 1", "Semifinals", "Round 2", "Conference Final", "Final"];
   const found = [...new Set(sideRows.map(r => r.round).filter(Boolean))];
   return order.filter(r => found.includes(r)).concat(found.filter(r => !order.includes(r)));
 }
 
-function bracketMatchupHtml(rows) {
+function bracketMatchupHtml(rows, settings = {}) {
+  const winsToWin = parseInt(settings.series_wins_to_win || "4", 10) || 4;
+  const seriesStatus = rows.map(r => r.seriesStatus).find(Boolean) || "";
+  const gameIds = rows.map(r => r.gameIds).find(Boolean) || "";
   return `<div class="bracket-matchup">${rows.map(r => {
     const status = String(r.status||"").toLowerCase();
-    const winner = status === "winner" || status === "won" || String(r.wins||"") === "4";
+    const winner = status === "winner" || status === "won" || Number(r.wins||0) >= winsToWin;
     return `<div class="bracket-team ${winner ? "winner" : ""}">
       <div class="bracket-seed">${r.seed || ""}</div>
       <div class="bracket-name">${r.team || "TBD"}</div>
       <div class="bracket-wins">${r.wins || ""}</div>
     </div>`;
-  }).join("")}</div>`;
+  }).join("")}
+    ${seriesStatus ? `<div class="bracket-series-meta">${seriesStatus}</div>` : ""}
+    ${gameIds ? `<div class="bracket-series-meta bracket-series-games">Games: ${gameIds}</div>` : ""}
+  </div>`;
 }
 
-function bracketSideHtml(side, rows) {
+function bracketSideHtml(side, rows, settings) {
   const rounds = bracketRoundsFor(rows);
   return `<div class="bracket-side ${side.toLowerCase()}">
     ${rounds.map(round => {
@@ -2431,7 +2489,7 @@ function bracketSideHtml(side, rows) {
       const seriesIds = [...new Set(roundRows.map(r => r.series))];
       return `<div class="bracket-round">
         <div class="bracket-round-title">${round}</div>
-        ${seriesIds.map(series => bracketMatchupHtml(roundRows.filter(r => r.series === series))).join("")}
+        ${seriesIds.map(series => bracketMatchupHtml(roundRows.filter(r => r.series === series), settings)).join("")}
       </div>`;
     }).join("")}
   </div>`;
@@ -2449,6 +2507,8 @@ function renderPlayoffBracket(data, settings) {
     wins: String(r[idx["Wins"]]||"").trim(),
     logo: String(r[idx["Logo URL"]]||"").trim(),
     status: String(r[idx["Status"]]||"").trim(),
+    seriesStatus: String(r[idx["Series Status"]]||"").trim(),
+    gameIds: String(r[idx["Game IDs"]]||"").trim(),
   })).filter(r => r.side && r.round && r.series);
 
   const east = rows.filter(r => r.side.toLowerCase() === "east");
@@ -2462,12 +2522,12 @@ function renderPlayoffBracket(data, settings) {
         <div class="bracket-subtitle">${settings.bracket_subtitle || ""}</div>
       </div>
       <div class="bracket-board">
-        ${bracketSideHtml("east", east)}
+        ${bracketSideHtml("east", east, settings)}
         <div class="bracket-finals">
           <div class="bracket-finals-label">${settings.finals_label || "CHAMPIONS"}</div>
-          ${finals.length ? bracketMatchupHtml(finals) : bracketMatchupHtml([{team:"TBD"},{team:"TBD"}])}
+          ${finals.length ? bracketMatchupHtml(finals, settings) : bracketMatchupHtml([{team:"TBD"},{team:"TBD"}], settings)}
         </div>
-        ${bracketSideHtml("west", west)}
+        ${bracketSideHtml("west", west, settings)}
       </div>
     </div>`;
 }
@@ -3553,8 +3613,33 @@ function teamsMatchForCard(rowTeam, wantedTeam) {
   return nameToAbbr(row) === wanted.toUpperCase();
 }
 
-function findPlayerRoleRows(playerName, isGoalie) {
-  const data = isGoalie ? goalieData : playerData;
+async function ensurePlayoffStatsLoaded() {
+  if (!PLAYOFF_SHEET_ID) return;
+  if (!playoffPlayerData.cols.length) {
+    try {
+      const raw = await fetchTab("Player Stats", PLAYOFF_SHEET_ID);
+      playoffPlayerData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols, season: "playoffs" };
+    } catch(e) { console.warn("Playoff player stats unavailable", e); }
+  }
+  if (!playoffGoalieData.cols.length) {
+    try {
+      const raw = await fetchTab("Goalie Stats", PLAYOFF_SHEET_ID);
+      playoffGoalieData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols, season: "playoffs" };
+    } catch(e) { console.warn("Playoff goalie stats unavailable", e); }
+  }
+}
+
+function roleInfo(role) {
+  return {
+    isGoalie: role === "goalie" || role === "playoff-goalie",
+    season: role === "playoff-player" || role === "playoff-goalie" ? "playoffs" : "regular",
+  };
+}
+
+function findPlayerRoleRows(playerName, isGoalie, season = "regular") {
+  const data = season === "playoffs"
+    ? (isGoalie ? playoffGoalieData : playoffPlayerData)
+    : (isGoalie ? goalieData : playerData);
   if (!data.cols.length) return { rows: [], headers: [] };
 
   const idx = getIndexMap(data.cols);
@@ -3566,8 +3651,8 @@ function findPlayerRoleRows(playerName, isGoalie) {
   return { rows, headers: data.cols };
 }
 
-function buildPlayerStatSplits(playerName, clickedStats, clickedIsRole, isGoalie) {
-  const { rows, headers } = findPlayerRoleRows(playerName, isGoalie);
+function buildPlayerStatSplits(playerName, clickedStats, clickedIsRole, isGoalie, season = "regular") {
+  const { rows, headers } = findPlayerRoleRows(playerName, isGoalie, season);
   const idx = getIndexMap(headers);
   const teamIdx = idx["Team"];
   const clickedTeam = nameToAbbr(clickedStats && clickedStats["Team"]);
@@ -3625,12 +3710,13 @@ function updatePlayerModalMeta(role) {
   const meta = document.getElementById("modal-meta");
   if (!card || !meta) return;
 
-  const activeRole = role === "goalie" ? "goalie" : "player";
+  const info = roleInfo(role);
+  const activeRole = role || "player";
   const activeStats = activePlayerSplit(activeRole)?.stats || card.clickedStats || {};
   const team = activeStats["Team"] || card.clickedStats?.["Team"] || "";
-  const pos = activeRole === "goalie" ? "Goalie" : (activeStats["Position"] || card.clickedStats?.["Position"] || "");
+  const pos = info.isGoalie ? "Goalie" : (activeStats["Position"] || card.clickedStats?.["Position"] || "");
   const plat = activeStats["Platform"] || card.clickedStats?.["Platform"] || "";
-  const overallBadge = renderOverallBadge(activeStats, activeRole, card.playerName);
+  const overallBadge = renderOverallBadge(activeStats, info.isGoalie ? "goalie" : "player", card.playerName);
 
   meta.innerHTML = `
     <span><strong style="color:#fff">${team}</strong></span>
@@ -3655,8 +3741,9 @@ function renderPlayerRolePanel(role) {
   const split = activePlayerSplit(role);
   if (!split) return "";
   const playerName = window._activePlayerCard?.playerName || "";
-  const positionChart = renderPositionBreakdown(playerName, split.stats, role);
-  return renderPlayerSplitControls(role) + positionChart + renderPlayerStatSections(split.stats, role === "goalie");
+  const info = roleInfo(role);
+  const positionChart = renderPositionBreakdown(playerName, split.stats, info.isGoalie ? "goalie" : "player");
+  return renderPlayerSplitControls(role) + positionChart + renderPlayerStatSections(split.stats, info.isGoalie);
 }
 
 function setPlayerStatSplit(role, key) {
@@ -3670,18 +3757,33 @@ function setPlayerStatSplit(role, key) {
   updatePlayerModalMeta(role);
 }
 
-function openPlayerModal(playerName, rowData, headers, isGoalie) {
+async function openPlayerModal(playerName, rowData, headers, isGoalie, season = "regular") {
   const clickedStats = statsFromRow(rowData, headers);
-  const playerSplits = buildPlayerStatSplits(playerName, clickedStats, !isGoalie, false);
-  const goalieSplits = buildPlayerStatSplits(playerName, clickedStats, isGoalie, true);
-  const activeRole = isGoalie && goalieSplits.splits.length ? "goalie" : (playerSplits.splits.length ? "player" : "goalie");
+  await ensurePlayoffStatsLoaded();
+  const clickedIsRegular = season !== "playoffs";
+  const playerSplits = buildPlayerStatSplits(playerName, clickedStats, !isGoalie && clickedIsRegular, false, "regular");
+  const goalieSplits = buildPlayerStatSplits(playerName, clickedStats, isGoalie && clickedIsRegular, true, "regular");
+  const playoffPlayerSplits = buildPlayerStatSplits(playerName, clickedStats, !isGoalie && !clickedIsRegular, false, "playoffs");
+  const playoffGoalieSplits = buildPlayerStatSplits(playerName, clickedStats, isGoalie && !clickedIsRegular, true, "playoffs");
+  const activeRole = !clickedIsRegular && isGoalie && playoffGoalieSplits.splits.length ? "playoff-goalie"
+    : !clickedIsRegular && playoffPlayerSplits.splits.length ? "playoff-player"
+    : isGoalie && goalieSplits.splits.length ? "goalie"
+    : playerSplits.splits.length ? "player"
+    : playoffPlayerSplits.splits.length ? "playoff-player"
+    : playoffGoalieSplits.splits.length ? "playoff-goalie"
+    : "goalie";
 
   window._activePlayerCard = {
     playerName,
     team: "",
     clickedStats,
     activeRole,
-    roleSplits: { player: playerSplits, goalie: goalieSplits }
+    roleSplits: {
+      player: playerSplits,
+      goalie: goalieSplits,
+      "playoff-player": playoffPlayerSplits,
+      "playoff-goalie": playoffGoalieSplits,
+    }
   };
 
   document.getElementById("modal-name").textContent = playerName;
@@ -3690,14 +3792,18 @@ function openPlayerModal(playerName, rowData, headers, isGoalie) {
   const tabs = [];
   if (playerSplits.splits.length) tabs.push({ id: "player", label: "Player Stats" });
   if (goalieSplits.splits.length) tabs.push({ id: "goalie", label: "Goalie Stats" });
+  if (playoffPlayerSplits.splits.length) tabs.push({ id: "playoff-player", label: "Playoff Player" });
+  if (playoffGoalieSplits.splits.length) tabs.push({ id: "playoff-goalie", label: "Playoff Goalie" });
   tabs.push({ id: "games", label: "Recent Games" });
 
   document.getElementById("modal-body").innerHTML = `
     <div class="player-card-tabs">
-      ${tabs.map(t => `<button class="player-card-tab ${t.id===activeRole?"active":""}" data-player-tab="${t.id}" onclick="showPlayerCardTab('${t.id}')">${t.label}</button>`).join("")}
+    ${tabs.map(t => `<button class="player-card-tab ${t.id===activeRole?"active":""}" data-player-tab="${t.id}" onclick="showPlayerCardTab('${t.id}')">${t.label}</button>`).join("")}
     </div>
     ${playerSplits.splits.length ? `<div class="player-card-panel ${activeRole==="player"?"active":""}" id="player-card-player">${renderPlayerRolePanel("player")}</div>` : ""}
     ${goalieSplits.splits.length ? `<div class="player-card-panel ${activeRole==="goalie"?"active":""}" id="player-card-goalie">${renderPlayerRolePanel("goalie")}</div>` : ""}
+    ${playoffPlayerSplits.splits.length ? `<div class="player-card-panel ${activeRole==="playoff-player"?"active":""}" id="player-card-playoff-player">${renderPlayerRolePanel("playoff-player")}</div>` : ""}
+    ${playoffGoalieSplits.splits.length ? `<div class="player-card-panel ${activeRole==="playoff-goalie"?"active":""}" id="player-card-playoff-goalie">${renderPlayerRolePanel("playoff-goalie")}</div>` : ""}
     <div class="player-card-panel player-games-list" id="player-card-games">
       <div class="loading">Loading player games...</div>
     </div>`;
@@ -3710,7 +3816,7 @@ function showPlayerCardTab(tab) {
     btn.classList.toggle("active", btn.dataset.playerTab === tab);
   });
   const card = window._activePlayerCard;
-  if (card && (tab === "player" || tab === "goalie")) {
+  if (card && (tab === "player" || tab === "goalie" || tab === "playoff-player" || tab === "playoff-goalie")) {
     card.activeRole = tab;
     updatePlayerModalMeta(tab);
   } else if (card) {
@@ -3718,8 +3824,12 @@ function showPlayerCardTab(tab) {
   }
   const playerPanel = document.getElementById("player-card-player");
   const goaliePanel = document.getElementById("player-card-goalie");
+  const playoffPlayerPanel = document.getElementById("player-card-playoff-player");
+  const playoffGoaliePanel = document.getElementById("player-card-playoff-goalie");
   if (playerPanel) playerPanel.classList.toggle("active", tab === "player");
   if (goaliePanel) goaliePanel.classList.toggle("active", tab === "goalie");
+  if (playoffPlayerPanel) playoffPlayerPanel.classList.toggle("active", tab === "playoff-player");
+  if (playoffGoaliePanel) playoffGoaliePanel.classList.toggle("active", tab === "playoff-goalie");
   document.getElementById("player-card-games").classList.toggle("active", tab === "games");
   if (tab === "games") renderPlayerRecentGames();
 }
@@ -3810,8 +3920,8 @@ document.addEventListener("keydown", e => {
 });
 
 // Make a player-name cell clickable
-function makeClickable(name, rowData, headers, isGoalie) {
-  return `<td class="player-name clickable" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie})'>${name}</td>`;
+function makeClickable(name, rowData, headers, isGoalie, season = "regular") {
+  return `<td class="player-name clickable" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie}, ${JSON.stringify(season)})'>${name}</td>`;
 }
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadStandings();
