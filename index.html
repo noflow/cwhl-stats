@@ -1261,7 +1261,7 @@
     <button onclick="showPage('goalies', this)">Goalie Stats</button>
     <button onclick="showPage('teams', this)">Teams</button>
     <button onclick="showPage('schedule', this)">Schedule</button>
-    <button id="bracket-nav-btn" style="display:none" onclick="showPage('bracket', this)">Playoff Bracket</button>
+    <button id="bracket-nav-btn" onclick="showPage('bracket', this)">Playoff Bracket</button>
     <button onclick="showPage('games', this)">Recent Games</button>
   </nav>
 </header>
@@ -2430,13 +2430,17 @@ function truthySetting(v) {
 }
 
 async function refreshBracketVisibility() {
-  if (!SCHEDULE_SHEET_ID) return;
+  const btn = document.getElementById("bracket-nav-btn");
+  if (!SCHEDULE_SHEET_ID) {
+    btn.style.display = "none";
+    return;
+  }
   try {
     const settings = await fetchScheduleSettings("Playoff Bracket Settings");
-    document.getElementById("bracket-nav-btn").style.display =
-      truthySetting(settings.bracket_enabled) ? "" : "none";
+    btn.style.display = truthySetting(settings.bracket_enabled) ? "" : "none";
   } catch(e) {
-    document.getElementById("bracket-nav-btn").style.display = "none";
+    console.warn("Could not read playoff bracket settings; keeping bracket tab visible.", e);
+    btn.style.display = "";
   }
 }
 
