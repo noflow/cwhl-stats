@@ -2642,7 +2642,9 @@ function disabledSetting(v) {
 }
 
 function bracketIsEnabled(settings = {}) {
-  return truthySetting(settingValue(settings, "bracket_enabled"));
+  const bracketEnabled = settingValue(settings, "bracket_enabled");
+  const showBracket = settingValue(settings, "show_bracket");
+  return truthySetting(bracketEnabled || showBracket);
 }
 
 function setBracketNavVisible(visible) {
@@ -2694,7 +2696,12 @@ async function refreshBracketVisibility() {
   try {
     const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
     applyPlayoffStatsVisibility(settings);
-    console.log("Playoff bracket setting:", settingValue(settings, "bracket_enabled"), settings);
+    console.log("Playoff bracket settings:", {
+      bracket_enabled: settingValue(settings, "bracket_enabled"),
+      show_bracket: settingValue(settings, "show_bracket"),
+      tab: bracketSettingsTabForSelectedSeason(),
+      settings,
+    });
     setBracketNavVisible(bracketIsEnabled(settings));
   } catch(e) {
     console.warn("Could not read playoff bracket settings; hiding bracket tab.", e);
