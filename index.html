@@ -1257,8 +1257,10 @@
   <button class="mobile-menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" onclick="toggleMobileMenu(event)">&#9776;</button>
   <nav id="main-nav">
     <button class="active" onclick="showPage('standings', this)">Standings</button>
-    <button onclick="showPage('players', this)">Player Stats</button>
-    <button onclick="showPage('goalies', this)">Goalie Stats</button>
+    <button onclick="showStatsSeason('players', 'regular', this)">Player Stats</button>
+    <button id="playoff-player-nav-btn" style="display:none" onclick="showStatsSeason('players', 'playoffs', this)">Playoff Player Stats</button>
+    <button onclick="showStatsSeason('goalies', 'regular', this)">Goalie Stats</button>
+    <button id="playoff-goalie-nav-btn" style="display:none" onclick="showStatsSeason('goalies', 'playoffs', this)">Playoff Goalie Stats</button>
     <button onclick="showPage('teams', this)">Teams</button>
     <button onclick="showPage('schedule', this)">Schedule</button>
     <button id="bracket-nav-btn" onclick="showPage('bracket', this)">Playoff Bracket</button>
@@ -1271,6 +1273,12 @@
   <!-- STANDINGS -->
   <div class="page active" id="page-standings">
     <div class="section-title">Standings</div>
+    <div class="controls">
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter website-season-select" onchange="changeWebsiteSeason(this.value)">
+        <option value="current">Current Season</option>
+      </select>
+    </div>
     <div class="standings-grid" id="standings-grid">
       <div class="loading"><div class="spinner"></div>Loading standings...</div>
     </div>
@@ -1280,6 +1288,10 @@
   <div class="page" id="page-players">
     <div class="section-title">Player Stats</div>
     <div class="controls">
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter website-season-select" onchange="changeWebsiteSeason(this.value)">
+        <option value="current">Current Season</option>
+      </select>
       <div class="search-box">
         <span class="search-icon">&#128269;</span>
         <input type="text" id="player-search" placeholder="Search player..." oninput="filterPlayers()">
@@ -1297,8 +1309,8 @@
       <select class="pos-filter" id="team-filter" onchange="filterPlayers()">
         <option value="">All Teams</option>
       </select>
-      <span class="filter-label">Season:</span>
-      <select class="pos-filter" id="player-season-filter" onchange="changePlayerSeason()">
+      <span class="filter-label playoff-stats-control" id="player-season-label" style="display:none">Season:</span>
+      <select class="pos-filter playoff-stats-control" id="player-season-filter" style="display:none" onchange="changePlayerSeason()">
         <option value="regular">Regular</option>
         <option value="playoffs">Playoffs</option>
       </select>
@@ -1313,12 +1325,16 @@
   <div class="page" id="page-goalies">
     <div class="section-title">Goalie Stats</div>
     <div class="controls">
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter website-season-select" onchange="changeWebsiteSeason(this.value)">
+        <option value="current">Current Season</option>
+      </select>
       <div class="search-box">
         <span class="search-icon">&#128269;</span>
         <input type="text" id="goalie-search" placeholder="Search goalie..." oninput="filterGoalies()">
       </div>
-      <span class="filter-label">Season:</span>
-      <select class="pos-filter" id="goalie-season-filter" onchange="changeGoalieSeason()">
+      <span class="filter-label playoff-stats-control" id="goalie-season-label" style="display:none">Season:</span>
+      <select class="pos-filter playoff-stats-control" id="goalie-season-filter" style="display:none" onchange="changeGoalieSeason()">
         <option value="regular">Regular</option>
         <option value="playoffs">Playoffs</option>
       </select>
@@ -1343,6 +1359,10 @@
     <div class="section-title">Schedule</div>
     <div class="controls">
       <span class="filter-label">Season:</span>
+      <select class="pos-filter website-season-select" onchange="changeWebsiteSeason(this.value)">
+        <option value="current">Current Season</option>
+      </select>
+      <span class="filter-label">Schedule:</span>
       <select class="pos-filter" id="schedule-type-filter" onchange="filterSchedule()">
         <option value="Regular Season Schedule">Regular Season</option>
         <option value="Playoff Schedule">Playoffs</option>
@@ -1361,6 +1381,12 @@
   <!-- PLAYOFF BRACKET -->
   <div class="page" id="page-bracket">
     <div class="section-title">Playoff Bracket</div>
+    <div class="controls">
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter website-season-select" onchange="changeWebsiteSeason(this.value)">
+        <option value="current">Current Season</option>
+      </select>
+    </div>
     <div id="bracket-content">
       <div class="loading"><div class="spinner"></div>Loading playoff bracket...</div>
     </div>
@@ -1371,6 +1397,10 @@
   <div class="page" id="page-games">
     <div class="section-title">Recent Games</div>
     <div class="controls">
+      <span class="filter-label">Season:</span>
+      <select class="pos-filter website-season-select" onchange="changeWebsiteSeason(this.value)">
+        <option value="current">Current Season</option>
+      </select>
       <span class="filter-label">Filter by team:</span>
       <select class="pos-filter" id="game-team-filter" onchange="filterGames()">
         <option value="">All Teams</option>
@@ -1393,6 +1423,11 @@ const SHEET_ID        = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I"; // publi
 const PLAYOFF_SHEET_ID = ""; // optional separate playoff publish sheet
 const SOURCE_SHEET_ID = "1KfHr5l2ms5d6dfgaDDACZVNymolxJw5ZSNfGkSlwPxU"; // scraper sheet (Game/Skater/Goalie Log)
 const SCHEDULE_SHEET_ID = "1AJhDuXAi4cnXCnrtvUXc7rwv3d2O8_Iu4JS86WnoxbQ"; // CWHL Schedule sheet
+const WEBSITE_SEASONS_TAB = "Website Seasons";
+let playoffRuntimeSettings = {};
+let playoffStatsEnabled = false;
+let websiteSeasons = [];
+let selectedWebsiteSeasonId = "current";
 
 const DIVISIONS = {
   "East": ["TOR","OTT","MTL","CAR","CBJ"],
@@ -1413,8 +1448,62 @@ const TEAMS = [
 ];
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
-function publishSheetIdForSeason(season) {
-  return season === "playoffs" ? PLAYOFF_SHEET_ID : SHEET_ID;
+function normalizeConfigKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function defaultWebsiteSeason() {
+  return {
+    id: "current",
+    label: "Current Season",
+    current: true,
+    regularPublishSheetId: SHEET_ID,
+    playoffPublishSheetId: PLAYOFF_SHEET_ID,
+    sourceSheetId: SOURCE_SHEET_ID,
+    scheduleSheetId: SCHEDULE_SHEET_ID,
+    regularScheduleTab: "Regular Season Schedule",
+    playoffScheduleTab: "Playoff Schedule",
+    bracketSettingsTab: "Playoff Bracket Settings",
+    bracketTab: "Playoff Bracket",
+  };
+}
+
+function currentWebsiteSeason() {
+  return websiteSeasons.find(s => s.id === selectedWebsiteSeasonId) || websiteSeasons[0] || defaultWebsiteSeason();
+}
+
+function playoffPublishSheetId() {
+  const season = currentWebsiteSeason();
+  return String(season.playoffPublishSheetId || playoffRuntimeSettings.playoff_publish_sheet_id || PLAYOFF_SHEET_ID || "").trim();
+}
+
+function publishSheetIdForSeason(phase) {
+  const season = currentWebsiteSeason();
+  if (phase === "playoffs") return playoffPublishSheetId();
+  return String(season.regularPublishSheetId || SHEET_ID || "").trim();
+}
+
+function sourceSheetIdForSelectedSeason() {
+  return String(currentWebsiteSeason().sourceSheetId || SOURCE_SHEET_ID || "").trim();
+}
+
+function scheduleSheetIdForSelectedSeason() {
+  return String(currentWebsiteSeason().scheduleSheetId || SCHEDULE_SHEET_ID || "").trim();
+}
+
+function scheduleTabForPhase(phase) {
+  const season = currentWebsiteSeason();
+  return phase === "playoffs"
+    ? (season.playoffScheduleTab || "Playoff Schedule")
+    : (season.regularScheduleTab || "Regular Season Schedule");
+}
+
+function bracketSettingsTabForSelectedSeason() {
+  return currentWebsiteSeason().bracketSettingsTab || "Playoff Bracket Settings";
+}
+
+function bracketTabForSelectedSeason() {
+  return currentWebsiteSeason().bracketTab || "Playoff Bracket";
 }
 
 async function fetchTab(tabName, sheetId = SHEET_ID) {
@@ -1491,7 +1580,8 @@ function parseCSV(text) {
 async function fetchSourceTab(tabName) {
   // Use gviz CSV output — served via gviz (no CORS issues) AND
   // returns raw text values so "123+456" match IDs are preserved as-is
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&cb=${Date.now()}`;
+  const sheetId = sourceSheetIdForSelectedSeason();
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
@@ -1503,10 +1593,11 @@ async function fetchSourceTab(tabName) {
 }
 
 async function fetchScheduleTab(tabName) {
-  if (!SCHEDULE_SHEET_ID) {
+  const sheetId = scheduleSheetIdForSelectedSeason();
+  if (!sheetId) {
     throw new Error("Schedule sheet ID has not been added to the website yet.");
   }
-  const url = `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&cb=${Date.now()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${tabName}`);
   const text = await res.text();
@@ -1528,9 +1619,96 @@ async function fetchScheduleSettings(tabName) {
   return settings;
 }
 
+function websiteSeasonFromRow(row, idx) {
+  const get = (...names) => {
+    for (const name of names) {
+      const pos = idx[normalizeConfigKey(name)];
+      if (pos !== undefined) return String(row[pos] || "").trim();
+    }
+    return "";
+  };
+
+  const label = get("Label", "Season", "Season Label") || "Current Season";
+  return {
+    id: get("Season ID", "ID") || normalizeConfigKey(label) || "current",
+    label,
+    current: truthySetting(get("Current", "Active", "Is Current")),
+    regularPublishSheetId: get("Regular Publish Sheet ID", "Regular Stats Sheet ID", "Regular Sheet ID"),
+    playoffPublishSheetId: get("Playoff Publish Sheet ID", "Playoff Stats Sheet ID", "Playoff Sheet ID"),
+    sourceSheetId: get("Source Sheet ID", "API Sheet ID", "Scraper Sheet ID"),
+    scheduleSheetId: get("Schedule Sheet ID") || SCHEDULE_SHEET_ID,
+    regularScheduleTab: get("Regular Schedule Tab") || "Regular Season Schedule",
+    playoffScheduleTab: get("Playoff Schedule Tab") || "Playoff Schedule",
+    bracketSettingsTab: get("Bracket Settings Tab") || "Playoff Bracket Settings",
+    bracketTab: get("Bracket Tab") || "Playoff Bracket",
+  };
+}
+
+async function loadWebsiteSeasons() {
+  const fallback = defaultWebsiteSeason();
+  if (!SCHEDULE_SHEET_ID) {
+    websiteSeasons = [fallback];
+    selectedWebsiteSeasonId = fallback.id;
+    populateWebsiteSeasonSelectors();
+    return;
+  }
+
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SCHEDULE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(WEBSITE_SEASONS_TAB)}&cb=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const allRows = parseCSV(await res.text());
+    if (allRows.length <= 1) throw new Error("No website season rows");
+    const idx = {};
+    allRows[0].forEach((name, i) => idx[normalizeConfigKey(name)] = i);
+    const rows = allRows.slice(1)
+      .filter(r => r.some(c => String(c || "").trim()))
+      .map(r => websiteSeasonFromRow(r, idx));
+    websiteSeasons = rows.length ? rows : [fallback];
+  } catch(e) {
+    console.warn("Website Seasons tab unavailable; using current season config.", e);
+    websiteSeasons = [fallback];
+  }
+
+  const current = websiteSeasons.find(s => s.current) || websiteSeasons[0] || fallback;
+  selectedWebsiteSeasonId = current.id;
+  populateWebsiteSeasonSelectors();
+}
+
+function populateWebsiteSeasonSelectors() {
+  const seasons = websiteSeasons.length ? websiteSeasons : [defaultWebsiteSeason()];
+  document.querySelectorAll(".website-season-select").forEach(sel => {
+    sel.innerHTML = seasons.map(season =>
+      `<option value="${season.id}">${season.label}</option>`
+    ).join("");
+    sel.value = selectedWebsiteSeasonId;
+  });
+}
+
+async function changeWebsiteSeason(seasonId) {
+  selectedWebsiteSeasonId = seasonId || "current";
+  populateWebsiteSeasonSelectors();
+  scheduleCache = {};
+  gameLogData = { cols: [], rows: [] };
+  skaterLogData = { cols: [], rows: [] };
+  goalieLogData = { cols: [], rows: [] };
+  allGamesRaw = [];
+  playoffPlayerData = { cols: [], rows: [] };
+  playoffGoalieData = { cols: [], rows: [] };
+  playoffBracketLoaded = false;
+  await refreshBracketVisibility();
+  await loadStandings();
+  await loadPlayers();
+  await loadGoalies();
+  if (document.getElementById("page-schedule").classList.contains("active")) await loadSchedule();
+  if (document.getElementById("page-games").classList.contains("active")) await loadGames();
+  if (document.getElementById("page-bracket").classList.contains("active")) await loadPlayoffBracket();
+}
+
 async function fetchSourceTabGviz(tabName) {
   // Backup: standard gviz JSON (drops lagout rows with + in match ID)
-  const url = `https://docs.google.com/spreadsheets/d/${SOURCE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1&cb=${Date.now()}`;
+  const sheetId = sourceSheetIdForSelectedSeason();
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&headers=1&cb=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = await res.text();
@@ -1562,6 +1740,16 @@ function showPage(id, btn) {
   history.replaceState(null, "", "#" + id);
 }
 
+function showStatsSeason(page, season, btn) {
+  if (season === "playoffs" && !playoffStatsEnabled) return;
+  const selectId = page === "goalies" ? "goalie-season-filter" : "player-season-filter";
+  const selector = document.getElementById(selectId);
+  if (selector) selector.value = season;
+  showPage(page, btn);
+  if (page === "goalies") loadGoalies();
+  else loadPlayers();
+}
+
 async function openTeamRoster(abbr) {
   const teamsNavBtn = document.querySelector(`nav button[onclick*="'teams'"]`);
   showPage("teams", teamsNavBtn);
@@ -1583,7 +1771,7 @@ const sortState = { players: {col: -1, dir: -1}, goalies: {col: -1, dir: -1} };
 // ── STANDINGS ─────────────────────────────────────────────────────────────────
 async function loadStandings() {
   try {
-    const { cols, rows } = await fetchTab("Standings");
+    const { cols, rows } = await fetchTab("Standings", publishSheetIdForSeason("regular"));
     // rows are data-only (gviz headers=1 already separated header)
     const teamData = {};
     rows.forEach(r => {
@@ -2276,7 +2464,9 @@ let scheduleCache = {};
 let scheduleData = { cols: [], rows: [] };
 
 async function loadSchedule() {
-  const tabName = document.getElementById("schedule-type-filter").value || "Regular Season Schedule";
+  const scheduleType = document.getElementById("schedule-type-filter").value || "Regular Season Schedule";
+  const phase = scheduleType === "Playoff Schedule" ? "playoffs" : "regular";
+  const tabName = scheduleTabForPhase(phase);
   try {
     if (!scheduleCache[tabName]) {
       scheduleCache[tabName] = await fetchScheduleTab(tabName);
@@ -2318,7 +2508,9 @@ function populateScheduleTeamFilter(selectedValue) {
 }
 
 function filterSchedule() {
-  const tabName = document.getElementById("schedule-type-filter").value || "Regular Season Schedule";
+  const scheduleType = document.getElementById("schedule-type-filter").value || "Regular Season Schedule";
+  const phase = scheduleType === "Playoff Schedule" ? "playoffs" : "regular";
+  const tabName = scheduleTabForPhase(phase);
   if (!scheduleCache[tabName]) {
     loadSchedule();
     return;
@@ -2429,17 +2621,50 @@ function truthySetting(v) {
   return ["yes","true","on","1","enabled"].includes(String(v||"").trim().toLowerCase());
 }
 
+function applyPlayoffStatsVisibility(settings = {}) {
+  playoffRuntimeSettings = settings || {};
+  playoffStatsEnabled = truthySetting(playoffRuntimeSettings.playoff_stats_enabled) && !!playoffPublishSheetId();
+
+  const controls = [
+    document.getElementById("player-season-label"),
+    document.getElementById("player-season-filter"),
+    document.getElementById("goalie-season-label"),
+    document.getElementById("goalie-season-filter"),
+    document.getElementById("playoff-player-nav-btn"),
+    document.getElementById("playoff-goalie-nav-btn"),
+  ];
+  controls.forEach(el => {
+    if (el) el.style.display = playoffStatsEnabled ? "" : "none";
+  });
+
+  const playerSeason = document.getElementById("player-season-filter");
+  const goalieSeason = document.getElementById("goalie-season-filter");
+  if (!playoffStatsEnabled && playerSeason?.value === "playoffs") {
+    playerSeason.value = "regular";
+    activePlayerSeason = "regular";
+    loadPlayers();
+  }
+  if (!playoffStatsEnabled && goalieSeason?.value === "playoffs") {
+    goalieSeason.value = "regular";
+    activeGoalieSeason = "regular";
+    loadGoalies();
+  }
+}
+
 async function refreshBracketVisibility() {
   const btn = document.getElementById("bracket-nav-btn");
-  if (!SCHEDULE_SHEET_ID) {
+  if (!scheduleSheetIdForSelectedSeason()) {
     btn.style.display = "none";
+    applyPlayoffStatsVisibility({});
     return;
   }
   try {
-    const settings = await fetchScheduleSettings("Playoff Bracket Settings");
+    const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
+    applyPlayoffStatsVisibility(settings);
     btn.style.display = truthySetting(settings.bracket_enabled) ? "" : "none";
   } catch(e) {
     console.warn("Could not read playoff bracket settings; keeping bracket tab visible.", e);
+    applyPlayoffStatsVisibility({});
     btn.style.display = "";
   }
 }
@@ -2447,12 +2672,12 @@ async function refreshBracketVisibility() {
 async function loadPlayoffBracket() {
   const target = document.getElementById("bracket-content");
   try {
-    const settings = await fetchScheduleSettings("Playoff Bracket Settings");
+    const settings = await fetchScheduleSettings(bracketSettingsTabForSelectedSeason());
     if (!truthySetting(settings.bracket_enabled)) {
       target.innerHTML = `<div class="loading">Playoff bracket is turned off in Playoff Bracket Settings.</div>`;
       return;
     }
-    const data = await fetchScheduleTab("Playoff Bracket");
+    const data = await fetchScheduleTab(bracketTabForSelectedSeason());
     renderPlayoffBracket(data, settings);
     playoffBracketLoaded = true;
     document.getElementById("bracket-nav-btn").style.display = "";
@@ -3618,16 +3843,18 @@ function teamsMatchForCard(rowTeam, wantedTeam) {
 }
 
 async function ensurePlayoffStatsLoaded() {
-  if (!PLAYOFF_SHEET_ID) return;
+  if (!playoffStatsEnabled) return;
+  const sheetId = playoffPublishSheetId();
+  if (!sheetId) return;
   if (!playoffPlayerData.cols.length) {
     try {
-      const raw = await fetchTab("Player Stats", PLAYOFF_SHEET_ID);
+      const raw = await fetchTab("Player Stats", sheetId);
       playoffPlayerData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols, season: "playoffs" };
     } catch(e) { console.warn("Playoff player stats unavailable", e); }
   }
   if (!playoffGoalieData.cols.length) {
     try {
-      const raw = await fetchTab("Goalie Stats", PLAYOFF_SHEET_ID);
+      const raw = await fetchTab("Goalie Stats", sheetId);
       playoffGoalieData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols, season: "playoffs" };
     } catch(e) { console.warn("Playoff goalie stats unavailable", e); }
   }
@@ -3928,12 +4155,6 @@ function makeClickable(name, rowData, headers, isGoalie, season = "regular") {
   return `<td class="player-name clickable" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie}, ${JSON.stringify(season)})'>${name}</td>`;
 }
 // ── INIT ──────────────────────────────────────────────────────────────────────
-loadStandings();
-loadPlayers();
-loadGoalies();
-loadTeams();
-refreshBracketVisibility();
-
 // Lazy-load schedule/games when tabs are first clicked
 const _origShowPage = showPage;
 window.showPage = function(id, btn) {
@@ -3945,14 +4166,26 @@ window.showPage = function(id, btn) {
 };
 
 // Restore active tab from URL hash on load
-(function restoreTab() {
+function restoreTab() {
   const validTabs = ['standings','players','goalies','teams','schedule','bracket','games'];
   const hash = window.location.hash.replace('#','');
   if (validTabs.includes(hash)) {
     const btn = document.querySelector(`nav button[onclick*="'${hash}'"]`);
     window.showPage(hash, btn);
   }
-})();
+}
+
+async function initSite() {
+  await loadWebsiteSeasons();
+  await refreshBracketVisibility();
+  await loadStandings();
+  await loadPlayers();
+  await loadGoalies();
+  await loadTeams();
+  restoreTab();
+}
+
+initSite();
 </script>
 
 <!-- PLAYER CARD MODAL -->
