@@ -1333,6 +1333,10 @@
         <span class="search-icon">&#128269;</span>
         <input type="text" id="goalie-search" placeholder="Search goalie..." oninput="filterGoalies()">
       </div>
+      <label class="filter-label" style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="goalie-starters-filter" onchange="filterGoalies()">
+        Show Starters
+      </label>
       <span class="filter-label playoff-stats-control" id="goalie-season-label" style="display:none">Season:</span>
       <select class="pos-filter playoff-stats-control" id="goalie-season-filter" style="display:none" onchange="changeGoalieSeason()">
         <option value="regular">Regular</option>
@@ -2055,12 +2059,14 @@ function renderPlayers() {
 let goalieData = { cols: [], rows: [] };
 let playoffGoalieData = { cols: [], rows: [] };
 let activeGoalieSeason = "regular";
+let goalieStarterGamesByTeam = {};
 
 async function loadGoalies() {
   try {
     const seasonSel = document.getElementById("goalie-season-filter");
     activeGoalieSeason = seasonSel ? seasonSel.value : "regular";
     const rawG = await fetchTab("Goalie Stats", publishSheetIdForSeason(activeGoalieSeason));
+    goalieStarterGamesByTeam = await loadGoalieStarterGames(activeGoalieSeason);
     const targetData = { cols: rawG.cols, rows: rawG.rows, numCols: rawG.numCols, season: activeGoalieSeason };
     if (activeGoalieSeason === "playoffs") playoffGoalieData = targetData;
     else goalieData = targetData;
@@ -2072,6 +2078,22 @@ async function loadGoalies() {
   }
 }
 
+async function loadGoalieStarterGames(season) {
+  const teamGames = {};
+  try {
+    const standings = await fetchTab("Standings", publishSheetIdForSeason(season));
+    standings.rows.forEach(r => {
+      const team = String(r[0] || "").trim();
+      const gp = Number(r[1]) || 0;
+      if (!team || team === "TEAM" || !gp) return;
+      teamGames[nameToAbbr(team)] = gp;
+    });
+  } catch(e) {
+    console.warn("Unable to load standings for goalie starter filter", e);
+  }
+  return teamGames;
+}
+
 function filterGoalies() { renderGoalies(); }
 function changeGoalieSeason() {
   loadGoalies();
@@ -2079,14 +2101,25 @@ function changeGoalieSeason() {
 
 function renderGoalies() {
   const search = document.getElementById("goalie-search").value.toLowerCase();
+  const showStarters = !!document.getElementById("goalie-starters-filter")?.checked;
   const data = activeGoalieSeason === "playoffs" ? playoffGoalieData : goalieData;
   const cols = data.cols;
   const rows = data.rows;
   if (!cols.length) return;
+  const teamIdx = cols.findIndex(h => String(h || "").trim() === "Team");
+  const gpIdx = cols.findIndex(h => String(h || "").trim() === "GP");
 
   let filtered = rows.filter(r => {
     const name = String(r[1]||"").toLowerCase();
-    return !search || name.includes(search);
+    if (search && !name.includes(search)) return false;
+    if (showStarters && gpIdx !== -1) {
+      const goalieGp = Number(r[gpIdx]) || 0;
+      const teamAbbr = teamIdx !== -1 ? nameToAbbr(r[teamIdx]) : "";
+      const teamGp = goalieStarterGamesByTeam[teamAbbr] || Math.max(...Object.values(goalieStarterGamesByTeam), 0);
+      const minimumGp = teamGp ? Math.ceil(teamGp / 4) : 0;
+      if (minimumGp && goalieGp < minimumGp) return false;
+    }
+    return true;
   });
 
   const {col, dir} = sortState.goalies;
@@ -2097,7 +2130,10 @@ function renderGoalies() {
     return String(av).localeCompare(String(bv)) * dir;
   });
 
-  document.getElementById("goalie-count").textContent = `${filtered.length} goalies`;
+  const starterNote = showStarters
+    ? ` (starters: ${Math.ceil((Math.max(...Object.values(goalieStarterGamesByTeam), 0) || 0) / 4)}+ GP)`
+    : "";
+  document.getElementById("goalie-count").textContent = `${filtered.length} goalies${starterNote}`;
 
   const gHdrs = data.cols;
   const headers = gHdrs.slice(1).map((c, i) => {
