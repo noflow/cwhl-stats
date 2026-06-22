@@ -1838,7 +1838,9 @@ async function loadHomeSettings() {
   const fallback = {
     home_title: "CWHL NHL",
     home_subtitle: "Competitive NHL 26 club league stats, schedules, standings, and playoff tracking.",
-    league_intro: "Welcome to the league hub. Follow the current season, team standings, player leaders, goalie leaders, recent games, and playoff race in one place."
+    league_intro: "Welcome to the league hub. Follow the current season, team standings, player leaders, goalie leaders, recent games, and playoff race in one place.",
+    season_label: "Season 2",
+    season_dates: "May 28 - July 12"
   };
   try {
     const settings = await fetchScheduleSettings("Website Settings");
@@ -1846,6 +1848,8 @@ async function loadHomeSettings() {
       home_title: settingValue(settings, "home_title") || settingValue(settings, "title") || fallback.home_title,
       home_subtitle: settingValue(settings, "home_subtitle") || settingValue(settings, "subtitle") || fallback.home_subtitle,
       league_intro: settingValue(settings, "league_intro") || settingValue(settings, "league_excerpt") || fallback.league_intro,
+      season_label: settingValue(settings, "season_label") || settingValue(settings, "season") || fallback.season_label,
+      season_dates: settingValue(settings, "season_dates") || settingValue(settings, "season_date_range") || fallback.season_dates,
     };
   } catch(e) {
     homeSettings = fallback;
@@ -1945,10 +1949,16 @@ async function loadHome() {
 
     const standTeamIdx = columnIndex(standings.cols, ["Team", "Name"]);
     const standGpIdx = columnIndex(standings.cols, ["GP", "Games Played"]);
-    const teams = standings.rows.filter(r => standTeamIdx < 0 || String(r[standTeamIdx] || "").trim()).length;
-    const totalTeamGames = standings.rows.reduce((sum, r) => sum + rowStat(r, standGpIdx), 0);
-    const completedGames = standGpIdx >= 0 ? Math.round(totalTeamGames / 2) : 0;
-    const starterCutoff = Math.ceil((Math.max(...Object.values(goalieStarterGamesByTeam), 0) || 0) / 4);
+    const teamCol = standTeamIdx >= 0 ? standTeamIdx : 0;
+    const gpCol = standGpIdx >= 0 ? standGpIdx : 1;
+    const officialAbbrs = new Set(TEAMS.map(t => t.abbr));
+    const officialStandingRows = standings.rows.filter(r => {
+      return officialAbbrs.has(nameToAbbr(r[teamCol]));
+    });
+    const teams = TEAMS.length;
+    const rowsForGames = officialStandingRows.length ? officialStandingRows : standings.rows;
+    const totalTeamGames = rowsForGames.reduce((sum, r) => sum + rowStat(r, gpCol), 0);
+    const completedGames = totalTeamGames ? Math.round(totalTeamGames / 2) : 0;
 
     const leaderCards = [
       buildPlayerLeaders("Top Goal Scorers", ["G", "Goals"]),
@@ -1972,8 +1982,8 @@ async function loadHome() {
       <section class="home-metrics">
         <div class="home-metric"><div class="home-metric-value">${teams || "-"}</div><div class="home-metric-label">Teams</div></div>
         <div class="home-metric"><div class="home-metric-value">${completedGames || "-"}</div><div class="home-metric-label">Games Played</div></div>
-        <div class="home-metric"><div class="home-metric-value">${escapeHtml(currentWebsiteSeason().label || "Current")}</div><div class="home-metric-label">Season</div></div>
-        <div class="home-metric"><div class="home-metric-value">${starterCutoff || "-"}</div><div class="home-metric-label">Goalie Starter Cutoff</div></div>
+        <div class="home-metric"><div class="home-metric-value">${escapeHtml(settings.season_label)}</div><div class="home-metric-label">Season</div></div>
+        <div class="home-metric"><div class="home-metric-value">${escapeHtml(settings.season_dates)}</div><div class="home-metric-label">Season Dates</div></div>
       </section>
       <section class="leader-grid">${leaderCards}</section>
     `;
