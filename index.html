@@ -1040,19 +1040,62 @@
     main { padding: 14px 10px; }
     .home-hero {
       grid-template-columns: 1fr;
-      padding: 18px;
+      gap: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
     }
     .home-title {
-      font-size: 32px;
+      font-size: 30px;
+    }
+    .home-subtitle {
+      font-size: 14px;
+      line-height: 1.35;
     }
     .home-intro {
       max-width: none;
+      padding: 12px;
+      font-size: 13px;
     }
     .home-metrics {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .home-metric {
+      min-width: 0;
+      padding: 11px 10px;
+    }
+    .home-metric-value {
+      font-size: 23px;
+      line-height: 1.05;
+      overflow-wrap: anywhere;
+    }
+    .home-metric-label {
+      font-size: 11px;
+      letter-spacing: 0.4px;
     }
     .leader-grid {
       grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .leader-card-title {
+      font-size: 15px;
+      padding: 8px 10px;
+    }
+    .leader-row {
+      grid-template-columns: 20px 26px minmax(0, 1fr) max-content;
+      gap: 7px;
+      padding: 8px 9px;
+    }
+    .leader-logo {
+      width: 23px;
+      height: 23px;
+    }
+    .leader-name {
+      font-size: 13px;
+    }
+    .leader-value {
+      font-size: 20px;
     }
     .standings-grid {
       gap: 14px;
@@ -1147,6 +1190,24 @@
     }
     .game-arrow {
       display: none;
+    }
+  }
+
+  @media (max-width: 390px) {
+    .home-metrics {
+      grid-template-columns: 1fr;
+    }
+    .home-title {
+      font-size: 28px;
+    }
+    .leader-row {
+      grid-template-columns: 18px 24px minmax(0, 1fr) max-content;
+      gap: 6px;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    .leader-value {
+      font-size: 18px;
     }
   }
 
