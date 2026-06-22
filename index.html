@@ -1875,9 +1875,10 @@ function escapeHtml(value) {
 }
 
 function columnIndex(cols, names) {
-  const wanted = names.map(normalizeConfigKey);
+  const wanted = names.map(normalizeConfigKey).filter(Boolean);
   for (let i = 0; i < cols.length; i++) {
-    if (wanted.includes(normalizeConfigKey(cols[i]))) return i;
+    const key = normalizeConfigKey(cols[i]);
+    if (key && wanted.includes(key)) return i;
   }
   return -1;
 }
@@ -1924,7 +1925,7 @@ function buildPlayerLeaders(title, colNames, valueKind = "number") {
   const statIdx = columnIndex(playerData.cols, colNames);
   if (nameIdx < 0 || statIdx < 0) return renderLeaderCard(title, []);
 
-  const rows = playerData.rows
+  const rows = buildLeaguePlayerRows(playerData.rows, playerData.cols, false)
     .map(row => ({
       name: row[nameIdx],
       team: teamIdx >= 0 ? row[teamIdx] : "",
@@ -1947,7 +1948,7 @@ function qualifiedGoalieRows() {
   const teamGames = Object.values(goalieStarterGamesByTeam).map(Number).filter(Boolean);
   const fallbackTeamGp = teamGames.length ? Math.max(...teamGames) : 0;
 
-  return goalieData.rows.filter(row => {
+  return buildLeaguePlayerRows(goalieData.rows, goalieData.cols, true).filter(row => {
     const name = String(row[nameIdx] || "").trim();
     if (!name || /^total/i.test(name)) return false;
     const teamAbbr = nameToAbbr(row[teamIdx]);
