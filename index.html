@@ -1766,6 +1766,7 @@ const TEAMS = [
 
 const ROSTER_SHEET_TAB = "CWHL Season 2 Roster";
 const ROSTER_BLOCK_BASES = [0, 9, 18, 27];
+const TEAM_SALARY_CAP = 73000000;
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
 function normalizeConfigKey(value) {
@@ -2820,6 +2821,22 @@ function rosterMoneyValue(row, base) {
   return "";
 }
 
+function parseRosterMoney(value) {
+  const n = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return isFinite(n) ? n : 0;
+}
+
+function formatRosterMoney(value) {
+  return "$" + Math.round(value).toLocaleString("en-US");
+}
+
+function calculatedCapRemaining(roster) {
+  const salaryTotal = [...(roster.skaters || []), ...(roster.goalies || [])]
+    .reduce((sum, player) => sum + parseRosterMoney(player.salary), 0);
+  if (!salaryTotal) return "";
+  return formatRosterMoney(TEAM_SALARY_CAP - salaryTotal);
+}
+
 function isRosterDataName(value) {
   const text = String(value || "").trim();
   if (!text) return false;
@@ -2912,6 +2929,8 @@ function parseOfficialRosterSheet(rows) {
           }
         }
       }
+
+      teamRoster.capRemaining = calculatedCapRemaining(teamRoster) || teamRoster.capRemaining;
 
       roster.teams[abbr] = teamRoster;
     });
@@ -3390,9 +3409,12 @@ function renderTeamRosterDashboard(abbr, data) {
 
     const body = dataRows.map(r =>
       `<tr>${displayCols.map(origIdx => {
-        const shown = officialRoster && origIdx === platformIdx
+        let shown = officialRoster && origIdx === platformIdx
           ? String(r._teamSalary || "-").trim()
           : String(r[origIdx]||"").trim();
+        if (!isGoalieTable && String(headers[origIdx] || "").trim() === "Position") {
+          shown = posShort(shown);
+        }
         const v = shown || "-";
         if (origIdx === 1) {
           return makeClickable(v, [...r], [...headers], isGoalieTable);
