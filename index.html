@@ -493,15 +493,19 @@
     background: var(--teal);
     color: #fff;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 22px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    padding: 12px 18px;
+    padding: 14px 18px;
     border-radius: 8px 8px 0 0;
-    text-transform: uppercase;
     display: flex;
     align-items: center;
     gap: 12px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .team-banner-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 220px;
   }
   .team-banner-logo {
     width: 46px;
@@ -509,6 +513,75 @@
     object-fit: contain;
     flex: 0 0 auto;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+  }
+  .team-banner-name {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .team-banner-record {
+    color: rgba(255,255,255,0.82);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    margin-top: 5px;
+    text-transform: uppercase;
+  }
+  .team-banner-cap {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 6px;
+    padding: 8px 12px;
+    text-align: right;
+    min-width: 138px;
+  }
+  .team-banner-cap-label {
+    color: rgba(255,255,255,0.72);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .team-banner-cap-value {
+    color: var(--gold);
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 0.7px;
+    margin-top: 2px;
+  }
+  .team-management {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px 14px;
+    background: #fff;
+    border-bottom: 1px solid var(--grey2);
+  }
+  .team-management-card {
+    background: var(--teal3);
+    border: 1px solid var(--grey2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    min-width: 0;
+  }
+  .team-management-role {
+    color: var(--grey3);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+  }
+  .team-management-name {
+    color: var(--teal);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .subsection-label {
     background: var(--teal3);
@@ -519,6 +592,14 @@
     letter-spacing: 1px;
     padding: 6px 14px;
     text-transform: uppercase;
+  }
+  .subsection-note {
+    color: var(--grey3);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    margin-left: 6px;
   }
   .totals-row td { background: var(--grey2) !important; font-weight: 700; color: var(--black) !important; }
 
@@ -1461,6 +1542,15 @@
     .bracket-stage { padding: 14px; }
     .bracket-title { font-size: 34px; }
     .bracket-board { min-width: 980px; gap: 18px; }
+    .team-banner { align-items: stretch; }
+    .team-banner-main { width: 100%; }
+    .team-banner-cap {
+      width: 100%;
+      text-align: left;
+    }
+    .team-management {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 </head>
@@ -1673,6 +1763,9 @@ const TEAMS = [
   {abbr:"OTT", name:"Ottawa Senators"},
   {abbr:"MTL", name:"Montreal Canadiens"},
 ];
+
+const ROSTER_SHEET_TAB = "CWHL Season 2 Roster";
+const ROSTER_BLOCK_BASES = [0, 9, 18, 27];
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
 function normalizeConfigKey(value) {
@@ -2129,6 +2222,9 @@ async function changeWebsiteSeason(seasonId) {
   skaterLogData = { cols: [], rows: [] };
   goalieLogData = { cols: [], rows: [] };
   allGamesRaw = [];
+  teamCache = {};
+  officialRosterCache = null;
+  teamStandingsSummary = {};
   playoffPlayerData = { cols: [], rows: [] };
   playoffGoalieData = { cols: [], rows: [] };
   playoffBracketLoaded = false;
@@ -2140,6 +2236,7 @@ async function changeWebsiteSeason(seasonId) {
   if (document.getElementById("page-home").classList.contains("active")) await loadHome();
   if (document.getElementById("page-schedule").classList.contains("active")) await loadSchedule();
   if (document.getElementById("page-games").classList.contains("active")) await loadGames();
+  if (document.getElementById("page-teams").classList.contains("active")) await loadTeams();
   if (document.getElementById("page-bracket").classList.contains("active")) await loadPlayoffBracket();
 }
 
@@ -2207,9 +2304,58 @@ async function openTeamRoster(abbr) {
 const sortState = { players: {col: -1, dir: -1}, goalies: {col: -1, dir: -1} };
 
 // ── STANDINGS ─────────────────────────────────────────────────────────────────
+let teamStandingsSummary = {};
+
+function normalizeStandingsTeamName(value) {
+  let text = String(value || "").trim().toLowerCase();
+  text = text.normalize ? text.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : text;
+  text = text.replace(/-/g, " ").replace(/\s+/g, " ");
+  ["cwnhl ", "cwhl ", "wca "].forEach(prefix => {
+    if (text.startsWith(prefix)) text = text.slice(prefix.length);
+  });
+  const aliases = {
+    "columbus": "columbus blue jackets",
+    "golden knights": "vegas golden knights",
+    "vegas knights": "vegas golden knights",
+    "los angeles kings": "la kings",
+  };
+  return aliases[text] || text;
+}
+
+function parseStandingsSummary(rows) {
+  const teamDataByName = {};
+  rows.forEach(r => {
+    const team = String(r[0] || "").trim();
+    if (!team || team === "TEAM" || !r[1]) return;
+    teamDataByName[normalizeStandingsTeamName(team)] = {
+      gp:  Number(r[1]) || 0,
+      w:   Number(r[2]) || 0,
+      l:   Number(r[3]) || 0,
+      otl: Number(r[4]) || 0,
+      pts: Number(r[5]) || 0,
+      gf:  Number(r[6]) || 0,
+      ga:  Number(r[7]) || 0,
+    };
+  });
+
+  const byAbbr = {};
+  TEAMS.forEach(t => {
+    byAbbr[t.abbr] = teamDataByName[normalizeStandingsTeamName(t.name)] || { gp:0, w:0, l:0, otl:0, pts:0, gf:0, ga:0 };
+  });
+  return byAbbr;
+}
+
+async function ensureTeamStandingsSummaryLoaded() {
+  if (Object.keys(teamStandingsSummary).length) return teamStandingsSummary;
+  const { rows } = await fetchTab("Standings", publishSheetIdForSeason("regular"));
+  teamStandingsSummary = parseStandingsSummary(rows);
+  return teamStandingsSummary;
+}
+
 async function loadStandings() {
   try {
     const { cols, rows } = await fetchTab("Standings", publishSheetIdForSeason("regular"));
+    teamStandingsSummary = parseStandingsSummary(rows);
     // rows are data-only (gviz headers=1 already separated header)
     const teamData = {};
     const teamDataByName = {};
@@ -2590,6 +2736,7 @@ function sortTable(which, origIdx) {
 // ── TEAMS ─────────────────────────────────────────────────────────────────────
 let teamCache = {};
 let activeTeam = null;
+let officialRosterCache = null;
 
 async function loadTeams() {
   const nav = document.getElementById("team-nav");
@@ -2607,7 +2754,7 @@ async function showTeam(abbr, btn) {
   activeTeam = abbr;
 
   if (teamCache[abbr]) {
-    renderTeamFromMaster(abbr, teamCache[abbr]);
+    renderTeamRosterDashboard(abbr, teamCache[abbr]);
     return;
   }
 
@@ -2617,9 +2764,11 @@ async function showTeam(abbr, btn) {
     // Filter from master player/goalie data instead of team-specific tab
     // This avoids gviz issues with merged cells on team tabs
     await ensureMasterDataLoaded();
+    try { await ensureOfficialRosterLoaded(); } catch(e) { console.warn("Official roster unavailable", e); }
+    try { await ensureTeamStandingsSummaryLoaded(); } catch(e) { console.warn("Standings summary unavailable", e); }
     try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Game logs unavailable for current roster mapping", e); }
     teamCache[abbr] = { sk: playerData, gl: goalieData };
-    renderTeamFromMaster(abbr, teamCache[abbr]);
+    renderTeamRosterDashboard(abbr, teamCache[abbr]);
   } catch(e) {
     document.getElementById("team-content").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
   }
@@ -2629,6 +2778,144 @@ async function ensureMasterDataLoaded() {
   // Load player/goalie data if not already loaded
   if (!playerData.cols.length) await loadPlayers();
   if (!goalieData.cols.length) await loadGoalies();
+}
+
+async function ensureOfficialRosterLoaded() {
+  if (officialRosterCache) return officialRosterCache;
+  try {
+    const data = await fetchScheduleTab(ROSTER_SHEET_TAB);
+    officialRosterCache = parseOfficialRosterSheet([data.cols, ...data.rows]);
+  } catch(e) {
+    console.warn(`Unable to load ${ROSTER_SHEET_TAB}`, e);
+    officialRosterCache = { teams: {}, available: false };
+  }
+  return officialRosterCache;
+}
+
+function teamAbbrFromRosterName(value) {
+  const abbr = nameToAbbr(cleanTeamName(value));
+  return TEAMS.some(t => t.abbr === abbr) ? abbr : "";
+}
+
+function cleanRosterRoleName(value) {
+  return String(value || "")
+    .replace(/\b(OWNER|GM|AGM|SKATERS|PLAYER NAME|POSITION|SALARY)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractRosterRoleName(value, role) {
+  const text = String(value || "").trim();
+  const match = text.match(new RegExp(`${role}\\s+(.+?)(?:\\s+(?:SKATERS|PLAYER NAME|POSITION|SALARY)|$)`, "i"));
+  return cleanRosterRoleName(match ? match[1] : text.replace(new RegExp(`^${role}\\s*`, "i"), ""));
+}
+
+function rosterMoneyValue(row, base) {
+  for (let i = base; i <= base + 8; i++) {
+    const v = String(row[i] || "").trim();
+    if (/^\$/.test(v)) return v;
+  }
+  return "";
+}
+
+function isRosterDataName(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  return !/^(PLAYER NAME|SKATERS|GOALIES|OWNER|GM|AGM|ROSTER SPOTS|AVAILABLE CAP|TOTAL SALARY|OPEN SPOTS|IR SPOTS|-+)$/i.test(text);
+}
+
+function parseOfficialRosterSheet(rows) {
+  const roster = { teams: {}, available: true };
+  const seen = new Set();
+
+  ROSTER_BLOCK_BASES.forEach(base => {
+    rows.forEach((row, start) => {
+      const abbr = teamAbbrFromRosterName(row[base + 1]);
+      if (!abbr) return;
+      const key = `${abbr}:${start}:${base}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      let end = rows.length;
+      for (let r = start + 1; r < rows.length; r++) {
+        if (teamAbbrFromRosterName(rows[r][base + 1])) {
+          end = r;
+          break;
+        }
+      }
+
+      const teamRoster = roster.teams[abbr] || {
+        management: { owner: "", gm: "", agm: "" },
+        skaters: [],
+        goalies: [],
+        injuredReserve: [],
+        capRemaining: "",
+      };
+
+      const header = rows[start] || [];
+      const next = rows[start + 1] || [];
+      const names = rows[start + 2] || [];
+      const compactOwner = extractRosterRoleName(header[base], "OWNER");
+      const compactGm = extractRosterRoleName(header[base + 3], "GM");
+      const compactAgm = extractRosterRoleName(header[base + 6], "AGM");
+      teamRoster.management.owner = compactOwner || teamRoster.management.owner || cleanRosterRoleName(names[base]);
+      teamRoster.management.gm = compactGm || teamRoster.management.gm || cleanRosterRoleName(names[base + 3]);
+      teamRoster.management.agm = compactAgm || teamRoster.management.agm || cleanRosterRoleName(names[base + 6]);
+      if (!/OWNER/i.test(next[base] || "")) {
+        teamRoster.management.owner = compactOwner || teamRoster.management.owner;
+        teamRoster.management.gm = compactGm || teamRoster.management.gm;
+        teamRoster.management.agm = compactAgm || teamRoster.management.agm;
+      }
+
+      let section = "";
+      for (let r = start; r < end; r++) {
+        const current = rows[r] || [];
+        const first = String(current[base] || "").trim();
+        const second = String(current[base + 1] || "").trim();
+        const upperFirst = first.toUpperCase();
+        const upperSecond = second.toUpperCase();
+
+        if (upperFirst.includes("SKATERS")) { section = "skaters"; continue; }
+        if (upperFirst === "GOALIES") { section = "goalies"; continue; }
+        if (upperFirst.includes("AVAILABLE CAP")) {
+          teamRoster.capRemaining = rosterMoneyValue(current, base) || teamRoster.capRemaining;
+          section = "";
+          continue;
+        }
+        if (upperFirst.includes("INJURED RESERVE") || upperSecond.includes("INJURED RESERVE")) {
+          section = "injuredReserve";
+          continue;
+        }
+        if (upperFirst === "PLAYER NAME") continue;
+
+        if (section && isRosterDataName(first)) {
+          const entry = {
+            name: first,
+            salary: String(current[base + 4] || "").trim(),
+            position: String(current[base + 6] || "").trim(),
+          };
+          const target = teamRoster[section];
+          if (!target.some(p => cleanPlayerName(p.name) === cleanPlayerName(entry.name))) {
+            target.push(entry);
+          }
+        }
+      }
+
+      if (!teamRoster.capRemaining) {
+        for (let r = Math.max(0, start - 8); r < start; r++) {
+          const current = rows[r] || [];
+          const first = String(current[base] || "").trim().toUpperCase();
+          if (first.includes("AVAILABLE CAP")) {
+            teamRoster.capRemaining = rosterMoneyValue(current, base) || teamRoster.capRemaining;
+          }
+        }
+      }
+
+      roster.teams[abbr] = teamRoster;
+    });
+  });
+
+  return roster;
 }
 
 function cleanPlayerName(name) {
@@ -2773,6 +3060,79 @@ function buildCurrentRosterRows(rows, headers, targetAbbr, isGoalie, currentTeam
   return rosterRows;
 }
 
+function groupRowsByPlayerName(rows, headers) {
+  const idx = getIndexMap(headers);
+  const byName = new Map();
+  rows.forEach(r => {
+    const name = cleanPlayerName(r[idx["Username"]]);
+    if (!name) return;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(r);
+  });
+  return byName;
+}
+
+function emptyStatsRow(headers, entry, abbr) {
+  const idx = getIndexMap(headers);
+  const row = new Array(headers.length).fill("");
+  const set = (col, val) => { if (idx[col] !== undefined) row[idx[col]] = val; };
+  set("Username", entry.name);
+  set("Team", abbr);
+  set("Platform", "-");
+  set("Position", entry.position || "-");
+  headers.forEach((h, ci) => {
+    const col = String(h || "").trim();
+    if (!row[ci] && !["#","Username","Team","Platform","Position"].includes(col)) row[ci] = "0";
+  });
+  return row;
+}
+
+function rowForRosterEntry(entry, rowMap, headers, abbr, isGoalie) {
+  const idx = getIndexMap(headers);
+  const playerRows = rowMap.get(cleanPlayerName(entry.name)) || [];
+  const row = playerRows.length
+    ? aggregatePlayerRows(playerRows, headers, abbr, isGoalie)
+    : emptyStatsRow(headers, entry, abbr);
+  if (idx["Username"] !== undefined) row[idx["Username"]] = entry.name;
+  if (idx["Team"] !== undefined) row[idx["Team"]] = abbr;
+  if (!isGoalie && idx["Position"] !== undefined && entry.position) row[idx["Position"]] = entry.position;
+  row._teamSalary = entry.salary || "-";
+  return row;
+}
+
+function officialRosterNameSet(roster) {
+  const names = new Set();
+  if (!roster) return names;
+  ["skaters", "goalies", "injuredReserve"].forEach(section => {
+    (roster[section] || []).forEach(p => names.add(cleanPlayerName(p.name)));
+  });
+  Object.values(roster.management || {}).forEach(name => {
+    if (name) names.add(cleanPlayerName(name));
+  });
+  return names;
+}
+
+function formatTeamRecord(summary) {
+  const s = summary || { gp:0, w:0, l:0, otl:0, pts:0, gf:0, ga:0 };
+  return `${s.w}-${s.l}-${s.otl} | ${s.pts} PTS | GF ${s.gf} | GA ${s.ga}`;
+}
+
+function managementHtml(management = {}) {
+  const cards = [
+    ["Owner", management.owner],
+    ["GM", management.gm],
+    ["AGM", management.agm],
+  ];
+  if (!cards.some(([, name]) => String(name || "").trim())) return "";
+  return `<div class="team-management">
+    ${cards.map(([role, name]) => `
+      <div class="team-management-card">
+        <div class="team-management-role">${role}</div>
+        <div class="team-management-name" title="${escapeHtml(name || "-")}">${escapeHtml(name || "-")}</div>
+      </div>`).join("")}
+  </div>`;
+}
+
 function renderTeamFromMaster(abbr, { sk, gl }) {
   const team = TEAMS.find(t => t.abbr === abbr);
   const teamName = team ? team.name.toUpperCase() : abbr;
@@ -2912,6 +3272,150 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
         <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
           ${makeTable(glHeaders, glRows, svIdx, null)}
         </div>` : ""}
+    </div>`;
+}
+
+
+function renderTeamRosterDashboard(abbr, data) {
+  const { sk, gl } = data;
+  const team = TEAMS.find(t => t.abbr === abbr);
+  const teamName = team ? team.name : abbr;
+  const skHeaders = sk.cols;
+  const glHeaders = gl.cols;
+  const officialRoster = officialRosterCache?.teams?.[abbr] || null;
+  const standings = teamStandingsSummary[abbr] || { gp:0, w:0, l:0, otl:0, pts:0, gf:0, ga:0 };
+  const currentTeams = buildCurrentTeamMap();
+  const officialNames = officialRosterNameSet(officialRoster);
+  const skByName = groupRowsByPlayerName(sk.rows, skHeaders);
+  const glByName = groupRowsByPlayerName(gl.rows, glHeaders);
+
+  let rosteredSkaters = [];
+  let rosteredGoalies = [];
+  let ecuSkaters = [];
+  let ecuGoalies = [];
+
+  if (officialRoster) {
+    rosteredSkaters = (officialRoster.skaters || []).map(entry => rowForRosterEntry(entry, skByName, skHeaders, abbr, false));
+    rosteredGoalies = (officialRoster.goalies || []).map(entry => rowForRosterEntry(entry, glByName, glHeaders, abbr, true));
+    ecuSkaters = buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams)
+      .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(skHeaders)["Username"]])));
+    ecuGoalies = buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams)
+      .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(glHeaders)["Username"]])));
+  } else {
+    rosteredSkaters = buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams);
+    rosteredGoalies = buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams);
+  }
+
+  const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
+  const svIdx  = glHeaders.findIndex(h => String(h).trim() === "Save %");
+  const goalieGpIdx = glHeaders.findIndex(h => String(h).trim() === "GP");
+
+  rosteredSkaters.sort((a,b) => (parseFloat(b[ptsIdx]||0) - parseFloat(a[ptsIdx]||0)));
+  ecuSkaters.sort((a,b) => (parseFloat(b[ptsIdx]||0) - parseFloat(a[ptsIdx]||0)));
+  rosteredGoalies.sort((a,b) => (parseFloat(b[goalieGpIdx]||0) - parseFloat(a[goalieGpIdx]||0)));
+  ecuGoalies.sort((a,b) => (parseFloat(b[goalieGpIdx]||0) - parseFloat(a[goalieGpIdx]||0)));
+
+  const NON_SUM = new Set(["#","Username","Team","Platform","Position",
+    "Pts/GP","G/GP","A/GP","Shot %","Shots On Net %","Pass %","Faceoff %",
+    "Offense Rating","Defense Rating","Teamplay Rating",
+    "EV Sh%","EVO","GAR","WAR","Plus Minus","Possession (mins)","TOI (mins)"]);
+
+  function buildTotals(rows) {
+    if (!rows.length) return null;
+    const totals = new Array(skHeaders.length).fill("");
+    totals[0] = "TOTAL";
+    skHeaders.forEach((h, ci) => {
+      const hName = String(h||"").trim();
+      if (!hName || NON_SUM.has(hName)) return;
+      const sum = rows.reduce((acc, r) => acc + (parseFloat(r[ci]||0)||0), 0);
+      totals[ci] = Number.isInteger(sum) || Math.abs(sum - Math.round(sum)) < 0.001
+        ? Math.round(sum) : sum.toFixed(2);
+    });
+    const pmIdx = skHeaders.findIndex(h => String(h).trim() === "Plus Minus");
+    if (pmIdx !== -1) {
+      const pmSum = rows.reduce((acc,r) => acc + (parseInt(r[pmIdx]||0)||0), 0);
+      totals[pmIdx] = pmSum > 0 ? "+" + pmSum : String(pmSum);
+    }
+    const toiIdx = skHeaders.findIndex(h => String(h).trim() === "TOI (mins)");
+    if (toiIdx !== -1) {
+      totals[toiIdx] = rows.reduce((acc,r) => acc + (parseFloat(r[toiIdx]||0)||0), 0).toFixed(1);
+    }
+    return totals;
+  }
+
+  const SKIP_COLS = new Set([0, 2]);
+
+  function makeTeamTable(headers, dataRows, highlightCol, totalRow = null) {
+    let lastCol = 0;
+    headers.forEach((h,i) => { if (String(h||"").trim()) lastCol = i; });
+    const useCols = lastCol + 1;
+    const isGoalieTable = headers.some(h => String(h||"").trim() === "Save %");
+    const platformIdx = headers.findIndex(h => String(h||"").trim() === "Platform");
+    const displayCols = [];
+    for (let i = 0; i < useCols; i++) {
+      if (!SKIP_COLS.has(i)) displayCols.push(i);
+    }
+
+    const hdr = displayCols.map((origIdx, dispIdx) => {
+      const h = officialRoster && origIdx === platformIdx ? "Salary" : String(headers[origIdx]||"").trim();
+      return `<th onclick="sortTeamTable(this,${dispIdx})" style="cursor:pointer;white-space:nowrap">${h}</th>`;
+    }).join("");
+
+    const body = dataRows.map(r =>
+      `<tr>${displayCols.map(origIdx => {
+        const shown = officialRoster && origIdx === platformIdx
+          ? String(r._teamSalary || "-").trim()
+          : String(r[origIdx]||"").trim();
+        const v = shown || "-";
+        if (origIdx === 1) {
+          return makeClickable(v, [...r], [...headers], isGoalieTable);
+        }
+        if (origIdx === highlightCol) return `<td class="pts-cell">${v}</td>`;
+        return `<td>${v}</td>`;
+      }).join("")}</tr>`
+    ).join("");
+
+    const tot = totalRow
+      ? `<tr class="totals-row">${displayCols.map(origIdx => {
+          const v = officialRoster && origIdx === platformIdx ? "" : String(totalRow[origIdx]||"").trim();
+          return `<td>${v}</td>`;
+        }).join("")}</tr>`
+      : "";
+
+    return body
+      ? `<table><thead><tr>${hdr}</tr></thead><tbody>${body}${tot}</tbody></table>`
+      : `<p style="padding:16px;color:#888">No data yet for this team.</p>`;
+  }
+
+  function sectionHtml(label, headers, rows, highlightCol, totalRow = null, note = "") {
+    if (!headers.length) return "";
+    return `
+      <div class="subsection-label" style="margin-top:2px;">${label}${note ? `<span class="subsection-note">${note}</span>` : ""}</div>
+      <div class="table-wrap" style="border-radius:0;box-shadow:none;max-height:none;">
+        ${makeTeamTable(headers, rows, highlightCol, totalRow)}
+      </div>`;
+  }
+
+  document.getElementById("team-content").innerHTML = `
+    <div style="background:#fff;border-radius:8px;box-shadow:0 2px 16px rgba(0,0,0,0.08);overflow:hidden;margin-bottom:24px;">
+      <div class="team-banner">
+        <div class="team-banner-main">
+          ${teamLogoImg(abbr, "team-banner-logo", teamName)}
+          <div>
+            <div class="team-banner-name">${escapeHtml(teamName)}</div>
+            <div class="team-banner-record">${formatTeamRecord(standings)}</div>
+          </div>
+        </div>
+        <div class="team-banner-cap">
+          <div class="team-banner-cap-label">Cap Remaining</div>
+          <div class="team-banner-cap-value">${escapeHtml(officialRoster?.capRemaining || "-")}</div>
+        </div>
+      </div>
+      ${officialRoster ? managementHtml(officialRoster.management) : ""}
+      ${sectionHtml(officialRoster ? "Rostered Skaters" : "Skaters", skHeaders, rosteredSkaters, ptsIdx, rosteredSkaters.length ? buildTotals(rosteredSkaters) : null)}
+      ${glHeaders.length ? sectionHtml(officialRoster ? "Rostered Goalies" : "Goalies", glHeaders, rosteredGoalies, svIdx) : ""}
+      ${officialRoster && ecuSkaters.length ? sectionHtml("ECU Skaters", skHeaders, ecuSkaters, ptsIdx, null, "played but not on current roster") : ""}
+      ${officialRoster && ecuGoalies.length && glHeaders.length ? sectionHtml("ECU Goalies", glHeaders, ecuGoalies, svIdx, null, "played but not on current roster") : ""}
     </div>`;
 }
 
