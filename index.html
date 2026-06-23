@@ -2448,8 +2448,9 @@ let activePlayerSeason = "regular";
 function posGroup(pos) {
   const p = String(pos).toLowerCase();
   if (p.includes("center")) return "C";
-  if (p.includes("wing") || p.includes("lw") || p.includes("rw")) return "W";
-  if (p.includes("defense") || p.includes("def")) return "D";
+  if (p.includes("wing") || p.includes("lw") || p.includes("rw") || p.includes("leftwing") || p.includes("rightwing")) return "W";
+  if (p.includes("defense") || p.includes("defence") || p.includes("def")) return "D";
+  if (p === "g" || p.includes("goalie")) return "G";
   return "";
 }
 
@@ -2463,6 +2464,7 @@ function posShort(pos) {
     return "W";
   }
   if (g === "D") return "D";
+  if (g === "G") return "G";
   return pos;
 }
 
@@ -3095,7 +3097,9 @@ function rowForRosterEntry(entry, rowMap, headers, abbr, isGoalie) {
     : emptyStatsRow(headers, entry, abbr);
   if (idx["Username"] !== undefined) row[idx["Username"]] = entry.name;
   if (idx["Team"] !== undefined) row[idx["Team"]] = abbr;
-  if (!isGoalie && idx["Position"] !== undefined && entry.position) row[idx["Position"]] = entry.position;
+  if (!isGoalie && idx["Position"] !== undefined) {
+    row[idx["Position"]] = posShort(entry.position || row[idx["Position"]] || "");
+  }
   row._teamSalary = entry.salary || "-";
   return row;
 }
