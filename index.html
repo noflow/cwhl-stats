@@ -1767,6 +1767,7 @@ const TEAMS = [
 const ROSTER_SHEET_TAB = "CWHL Season 2 Roster";
 const ROSTER_BLOCK_BASES = [0, 9, 18, 27];
 const TEAM_SALARY_CAP = 73000000;
+const BANNED_QUIT_TAB = "Banned & Quit";
 
 // ── SHEET FETCH ───────────────────────────────────────────────────────────────
 function normalizeConfigKey(value) {
@@ -2025,7 +2026,7 @@ function buildPlayerLeaders(title, colNames, valueKind = "number") {
       team: teamIdx >= 0 ? row[teamIdx] : "",
       value: rowStat(row, statIdx),
     }))
-    .filter(item => item.name && !/^total/i.test(item.name) && Number.isFinite(item.value))
+    .filter(item => item.name && !/^total/i.test(item.name) && !isHiddenPlayerName(item.name) && Number.isFinite(item.value))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5)
     .map(item => ({ ...item, valueText: formatLeaderValue(item.value, valueKind) }));
@@ -2044,7 +2045,7 @@ function qualifiedGoalieRows() {
 
   return buildLeaguePlayerRows(goalieData.rows, goalieData.cols, true).filter(row => {
     const name = String(row[nameIdx] || "").trim();
-    if (!name || /^total/i.test(name)) return false;
+    if (!name || /^total/i.test(name) || isHiddenPlayerName(name)) return false;
     const teamAbbr = nameToAbbr(row[teamIdx]);
     const teamGp = goalieStarterGamesByTeam[teamAbbr] || fallbackTeamGp;
     const minimumGp = teamGp ? Math.ceil(teamGp / 4) : 0;
@@ -2064,7 +2065,7 @@ function buildGoalieLeaders(title, colNames, ascending, valueKind) {
       team: teamIdx >= 0 ? row[teamIdx] : "",
       value: rowStat(row, statIdx),
     }))
-    .filter(item => item.name && Number.isFinite(item.value))
+    .filter(item => item.name && !isHiddenPlayerName(item.name) && Number.isFinite(item.value))
     .sort((a, b) => ascending ? a.value - b.value : b.value - a.value)
     .slice(0, 5)
     .map(item => ({ ...item, valueText: formatLeaderValue(item.value, valueKind) }));
@@ -2226,10 +2227,13 @@ async function changeWebsiteSeason(seasonId) {
   teamCache = {};
   officialRosterCache = null;
   teamStandingsSummary = {};
+  hiddenPlayerNames = new Set();
+  hiddenPlayersLoaded = false;
   playoffPlayerData = { cols: [], rows: [] };
   playoffGoalieData = { cols: [], rows: [] };
   playoffBracketLoaded = false;
   await refreshBracketVisibility();
+  await ensureHiddenPlayersLoaded();
   await loadStandings();
   await loadPlayers();
   await loadGoalies();
@@ -2483,7 +2487,7 @@ async function loadPlayers() {
     const idx = getIndexMap(displayData.cols);
     const teamIdx = idx["Team"] ?? 2;
     const teams = new Map();
-    buildLeaguePlayerRows(displayData.rows, displayData.cols, false).forEach(r => {
+    filterHiddenRows(buildLeaguePlayerRows(displayData.rows, displayData.cols, false), displayData.cols).forEach(r => {
       const rawTeam = String(r[teamIdx]||"").trim();
       const abbr = nameToAbbr(cleanTeamName(rawTeam));
       if (abbr) teams.set(abbr, displayTeamName(rawTeam));
@@ -2547,7 +2551,7 @@ function renderPlayers() {
   const teamFil = document.getElementById("team-filter").value;
   const data = activePlayerSeason === "playoffs" ? playoffPlayerData : playerData;
   const cols = data.cols;
-  const rows = buildLeaguePlayerRows(data.rows, data.cols, false);
+  const rows = filterHiddenRows(buildLeaguePlayerRows(data.rows, data.cols, false), data.cols);
   if (!cols.length) return;
   const idx = getIndexMap(cols);
   const nameIdx = idx["Username"] ?? 1;
@@ -2678,6 +2682,7 @@ function renderGoalies() {
 
   let filtered = rows.filter(r => {
     const name = String(r[1]||"").toLowerCase();
+    if (isHiddenPlayerName(name)) return false;
     if (search && !name.includes(search)) return false;
     if (showStarters && gpIdx !== -1) {
       const goalieGp = Number(r[gpIdx]) || 0;
@@ -2943,6 +2948,44 @@ function cleanPlayerName(name) {
   return String(name||"").trim().toLowerCase();
 }
 
+let hiddenPlayerNames = new Set();
+let hiddenPlayersLoaded = false;
+
+function isHiddenStatusActive(status) {
+  const key = normalizeConfigKey(status);
+  return !["active", "allowed", "cleared", "clear", "reinstated", "removed", "remove", "no", "false"].includes(key);
+}
+
+function isHiddenPlayerName(name) {
+  return hiddenPlayerNames.has(cleanPlayerName(name));
+}
+
+function filterHiddenRows(rows, headers) {
+  const idx = getIndexMap(headers);
+  const nameIdx = idx["Username"] ?? idx["Player"] ?? idx["Name"] ?? 1;
+  return rows.filter(r => !isHiddenPlayerName(r[nameIdx]));
+}
+
+async function ensureHiddenPlayersLoaded() {
+  if (hiddenPlayersLoaded) return hiddenPlayerNames;
+  hiddenPlayerNames = new Set();
+  try {
+    const data = await fetchScheduleTab(BANNED_QUIT_TAB);
+    const idx = getIndexMap(data.cols);
+    const nameIdx = idx["Player Name"] ?? idx["Player"] ?? idx["Username"] ?? idx["Name"] ?? 0;
+    const statusIdx = idx["Status"] ?? 1;
+    data.rows.forEach(row => {
+      const name = String(row[nameIdx] || "").trim();
+      const status = String(row[statusIdx] || "").trim();
+      if (name && isHiddenStatusActive(status)) hiddenPlayerNames.add(cleanPlayerName(name));
+    });
+  } catch(e) {
+    console.warn(`${BANNED_QUIT_TAB} tab unavailable`, e);
+  }
+  hiddenPlayersLoaded = true;
+  return hiddenPlayerNames;
+}
+
 function parseStatNumber(v) {
   const n = parseFloat(String(v||"").replace("%","").replace("+",""));
   return isNaN(n) ? 0 : n;
@@ -3164,9 +3207,9 @@ function formatTeamRecord(summary) {
 
 function managementHtml(management = {}) {
   const cards = [
-    ["Owner", management.owner],
-    ["GM", management.gm],
-    ["AGM", management.agm],
+    ["Owner", isHiddenPlayerName(management.owner) ? "" : management.owner],
+    ["GM", isHiddenPlayerName(management.gm) ? "" : management.gm],
+    ["AGM", isHiddenPlayerName(management.agm) ? "" : management.agm],
   ];
   if (!cards.some(([, name]) => String(name || "").trim())) return "";
   return `<div class="team-management">
@@ -3343,13 +3386,17 @@ function renderTeamRosterDashboard(abbr, data) {
     rosteredSkaters = (officialRoster.skaters || []).map(entry => rowForRosterEntry(entry, skByName, skHeaders, abbr, false));
     rosteredGoalies = (officialRoster.goalies || []).map(entry => rowForRosterEntry(entry, glByName, glHeaders, abbr, true));
     addManagementRowsToRoster(rosteredSkaters, rosteredGoalies, officialRoster, skByName, glByName, skHeaders, glHeaders, abbr);
+    rosteredSkaters = filterHiddenRows(rosteredSkaters, skHeaders);
+    rosteredGoalies = filterHiddenRows(rosteredGoalies, glHeaders);
     ecuSkaters = buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams)
-      .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(skHeaders)["Username"]])));
+      .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(skHeaders)["Username"]])))
+      .filter(r => !isHiddenPlayerName(r[getIndexMap(skHeaders)["Username"]]));
     ecuGoalies = buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams)
-      .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(glHeaders)["Username"]])));
+      .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(glHeaders)["Username"]])))
+      .filter(r => !isHiddenPlayerName(r[getIndexMap(glHeaders)["Username"]]));
   } else {
-    rosteredSkaters = buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams);
-    rosteredGoalies = buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams);
+    rosteredSkaters = filterHiddenRows(buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams), skHeaders);
+    rosteredGoalies = filterHiddenRows(buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams), glHeaders);
   }
 
   const ptsIdx = skHeaders.findIndex(h => String(h).trim() === "PTS");
@@ -4316,10 +4363,10 @@ function openBoxScore(gameIdx, source) {
     const rawTeam = rawTeams[ti];
     const teamSkaters = skRows.filter(r =>
       nameToAbbr(cleanTeamName(String(r[skIdx["Team"]]||"").trim())) === nameToAbbr(cleanTeamName(rawTeam))
-    );
+    ).filter(r => !isHiddenPlayerName(r[skIdx["Username"]]));
     const teamGoalies = glRows.filter(r =>
       nameToAbbr(cleanTeamName(String(r[glGIdx["Team"]]||"").trim())) === nameToAbbr(cleanTeamName(rawTeam))
-    );
+    ).filter(r => !isHiddenPlayerName(r[glGIdx["Username"]]));
 
     const score = ti === 0 ? s1 : s2;
     const result = ti === 0
@@ -5054,6 +5101,7 @@ function setPlayerStatSplit(role, key) {
 }
 
 async function openPlayerModal(playerName, rowData, headers, isGoalie, season = "regular") {
+  if (isHiddenPlayerName(playerName)) return;
   const clickedStats = statsFromRow(rowData, headers);
   await ensurePlayoffStatsLoaded();
   const clickedIsRegular = season !== "playoffs";
@@ -5251,6 +5299,7 @@ function restoreTab() {
 
 async function initSite() {
   await loadWebsiteSeasons();
+  await ensureHiddenPlayersLoaded();
   await refreshBracketVisibility();
   startBracketVisibilityWatcher();
   await loadStandings();
