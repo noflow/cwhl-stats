@@ -3112,6 +3112,28 @@ function officialRosterNameSet(roster) {
   return names;
 }
 
+function addManagementRowsToRoster(rosteredSkaters, rosteredGoalies, officialRoster, skByName, glByName, skHeaders, glHeaders, abbr) {
+  if (!officialRoster?.management) return;
+  const skIdx = getIndexMap(skHeaders);
+  const glIdx = getIndexMap(glHeaders);
+  const skNames = new Set(rosteredSkaters.map(r => cleanPlayerName(r[skIdx["Username"]])));
+  const glNames = new Set(rosteredGoalies.map(r => cleanPlayerName(r[glIdx["Username"]])));
+
+  Object.values(officialRoster.management).forEach(name => {
+    const key = cleanPlayerName(name);
+    if (!key) return;
+    const entry = { name, salary: "", position: "" };
+    if (skByName.has(key) && !skNames.has(key)) {
+      rosteredSkaters.push(rowForRosterEntry(entry, skByName, skHeaders, abbr, false));
+      skNames.add(key);
+    }
+    if (glByName.has(key) && !glNames.has(key)) {
+      rosteredGoalies.push(rowForRosterEntry(entry, glByName, glHeaders, abbr, true));
+      glNames.add(key);
+    }
+  });
+}
+
 function formatTeamRecord(summary) {
   const s = summary || { gp:0, w:0, l:0, otl:0, pts:0, gf:0, ga:0 };
   return `${s.w}-${s.l}-${s.otl} | ${s.pts} PTS | GF ${s.gf} | GA ${s.ga}`;
@@ -3297,6 +3319,7 @@ function renderTeamRosterDashboard(abbr, data) {
   if (officialRoster) {
     rosteredSkaters = (officialRoster.skaters || []).map(entry => rowForRosterEntry(entry, skByName, skHeaders, abbr, false));
     rosteredGoalies = (officialRoster.goalies || []).map(entry => rowForRosterEntry(entry, glByName, glHeaders, abbr, true));
+    addManagementRowsToRoster(rosteredSkaters, rosteredGoalies, officialRoster, skByName, glByName, skHeaders, glHeaders, abbr);
     ecuSkaters = buildCurrentRosterRows(sk.rows, skHeaders, abbr, false, currentTeams)
       .filter(r => !officialNames.has(cleanPlayerName(r[getIndexMap(skHeaders)["Username"]])));
     ecuGoalies = buildCurrentRosterRows(gl.rows, glHeaders, abbr, true, currentTeams)
