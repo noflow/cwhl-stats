@@ -4075,9 +4075,7 @@ async function loadGames() {
       });
     });
     console.log("Forfeit rows kept:", allGamesRaw.filter(r => {
-      const mid = String(r[glMidIdx]||r[0]||"").trim().toUpperCase();
-      const stitched = String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase();
-      return isForfeitMatchId(mid) || stitched === "FORFEIT";
+      return isForfeitGameRow(r, glIdx);
     }).length);
     const sel = document.getElementById("game-team-filter");
     sel.innerHTML = `<option value="">All Teams</option>`;
@@ -4154,8 +4152,7 @@ function renderGames() {
     const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
     const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
     const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-    const forfeit = isForfeitMatchId(matchId) ||
-      String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
+    const forfeit = isForfeitGameRow(r, glIdx);
     const t1wins = r1 === "Win";
     const t2wins = r2 === "Win";
 
@@ -4224,8 +4221,29 @@ function isForfeitMatchId(mid) {
     if (Number.isFinite(parsed)) numeric = Math.trunc(parsed).toString();
   }
   if (!/^\d{14}$/.test(numeric)) return false;
+  if (/^20\d{12}$/.test(numeric)) {
+    const year = Number(numeric.slice(0, 4));
+    const month = Number(numeric.slice(4, 6));
+    const day = Number(numeric.slice(6, 8));
+    const check = new Date(`${numeric.slice(0, 4)}-${numeric.slice(4, 6)}-${numeric.slice(6, 8)}T12:00:00`);
+    if (year >= 2020 && month >= 1 && month <= 12 && day >= 1 && day <= 31 && !Number.isNaN(check.getTime())) {
+      return true;
+    }
+  }
   const suffix = numeric.slice(8);
   return /^[1-9]{6}$/.test(suffix) && new Set(suffix.split("")).size === 1;
+}
+
+function gameCell(row, idx, col) {
+  const pos = idx[col];
+  return pos === undefined ? "" : String(row[pos] || "").trim();
+}
+
+function isForfeitGameRow(row, idx) {
+  const matchId = gameCell(row, idx, "Match ID");
+  const stitched = gameCell(row, idx, "Stitched Match IDs").toUpperCase();
+  const ended = gameCell(row, idx, "Ended Early").toUpperCase();
+  return isForfeitMatchId(matchId) || stitched.includes("FORFEIT") || ended === "FORFEIT";
 }
 
 function formatGameDateHeader(d) {
@@ -4248,8 +4266,7 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
   const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
   const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
   const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-  const forfeit = isForfeitMatchId(matchId) ||
-    String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
+  const forfeit = isForfeitGameRow(r, glIdx);
   const t1wins = r1 === "Win";
   const t2wins = r2 === "Win";
 
