@@ -1731,12 +1731,12 @@
 
 </main>
 
-<footer>CWHL NHL League Stats &mdash; Updated automatically each game night</footer>
+<footer>CWHL NHL League Stats -- Updated automatically each game night</footer>
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Your publish sheet ID — the one stats_publisher.py writes to
-const SHEET_ID        = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I"; // publish sheet
+const SHEET_ID = "1wPIBS4LOp6ciuUxp7IjtvEG7sjAok4c_FeNu0zzHU6I"; // publish sheet
 const PLAYOFF_SHEET_ID = ""; // optional separate playoff publish sheet
 const SOURCE_SHEET_ID = "1KfHr5l2ms5d6dfgaDDACZVNymolxJw5ZSNfGkSlwPxU"; // scraper sheet (Game/Skater/Goalie Log)
 const SCHEDULE_SHEET_ID = "1AJhDuXAi4cnXCnrtvUXc7rwv3d2O8_Iu4JS86WnoxbQ"; // CWHL Schedule sheet
@@ -1747,21 +1747,63 @@ let websiteSeasons = [];
 let selectedWebsiteSeasonId = "current";
 
 const DIVISIONS = {
-  "East": ["TOR","OTT","MTL","CAR","CBJ"],
-  "West": ["LAK","SJS","VGK","DAL","NSH"]
+  "East": [
+    "TOR",
+    "OTT",
+    "MTL",
+    "CAR",
+    "CBJ"
+  ],
+  "West": [
+    "LAK",
+    "SJS",
+    "VGK",
+    "DAL",
+    "NSH"
+  ]
 };
 
 const TEAMS = [
-  {abbr:"CAR", name:"Carolina Hurricanes"},
-  {abbr:"CBJ", name:"Columbus Blue Jackets"},
-  {abbr:"SJS", name:"San Jose Sharks"},
-  {abbr:"LAK", name:"LA Kings"},
-  {abbr:"DAL", name:"Dallas Stars"},
-  {abbr:"VGK", name:"Vegas Golden Knights"},
-  {abbr:"TOR", name:"Toronto Maple Leafs"},
-  {abbr:"NSH", name:"Nashville Predators"},
-  {abbr:"OTT", name:"Ottawa Senators"},
-  {abbr:"MTL", name:"Montreal Canadiens"},
+  {
+    "abbr": "CAR",
+    "name": "Carolina Hurricanes"
+  },
+  {
+    "abbr": "CBJ",
+    "name": "Columbus Blue Jackets"
+  },
+  {
+    "abbr": "SJS",
+    "name": "San Jose Sharks"
+  },
+  {
+    "abbr": "LAK",
+    "name": "LA Kings"
+  },
+  {
+    "abbr": "DAL",
+    "name": "Dallas Stars"
+  },
+  {
+    "abbr": "VGK",
+    "name": "Vegas Golden Knights"
+  },
+  {
+    "abbr": "TOR",
+    "name": "Toronto Maple Leafs"
+  },
+  {
+    "abbr": "NSH",
+    "name": "Nashville Predators"
+  },
+  {
+    "abbr": "OTT",
+    "name": "Ottawa Senators"
+  },
+  {
+    "abbr": "MTL",
+    "name": "Montreal Canadiens"
+  }
 ];
 
 const ROSTER_SHEET_TAB = "CWHL Season 2 Roster";
@@ -2482,6 +2524,7 @@ async function loadPlayers() {
     const targetData = { cols: raw.cols, rows: raw.rows, numCols: raw.numCols, season: activePlayerSeason };
     if (activePlayerSeason === "playoffs") playoffPlayerData = targetData;
     else playerData = targetData;
+    if (typeof resetRatingCaches === "function") resetRatingCaches();
     try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Current-team mapping unavailable for player totals", e); }
     const displayData = activePlayerSeason === "playoffs" ? playoffPlayerData : playerData;
     const idx = getIndexMap(displayData.cols);
@@ -2641,6 +2684,7 @@ async function loadGoalies() {
     const targetData = { cols: rawG.cols, rows: rawG.rows, numCols: rawG.numCols, season: activeGoalieSeason };
     if (activeGoalieSeason === "playoffs") playoffGoalieData = targetData;
     else goalieData = targetData;
+    if (typeof resetRatingCaches === "function") resetRatingCaches();
     const svIdx = targetData.cols.findIndex(h => h.trim() === "Save %");
     if (svIdx !== -1) sortState.goalies.col = svIdx;
     renderGoalies();
@@ -3232,17 +3276,48 @@ function renderTeamFromMaster(abbr, { sk, gl }) {
   // Match team value against target abbreviation
   // Handles: exact abbr match, full name match, case-insensitive, partial
   const ABBR_TO_KEYWORDS = {
-    "CAR": ["carolina","hurricanes"],
-    "CBJ": ["columbus"],
-    "SJS": ["san jose","sharks"],
-    "LAK": ["la kings","kings","angeles"],
-    "DAL": ["dallas","stars"],
-    "VGK": ["golden knights","vegas"],
-    "TOR": ["toronto","maple leafs","leafs"],
-    "NSH": ["nashville","predators"],
-    "OTT": ["ottawa","senators"],
-    "MTL": ["montreal","canadiens"],
-  };
+  "CAR": [
+    "carolina",
+    "hurricanes"
+  ],
+  "CBJ": [
+    "columbus"
+  ],
+  "SJS": [
+    "san jose",
+    "sharks"
+  ],
+  "LAK": [
+    "la kings",
+    "kings",
+    "angeles"
+  ],
+  "DAL": [
+    "dallas",
+    "stars"
+  ],
+  "VGK": [
+    "golden knights",
+    "vegas"
+  ],
+  "TOR": [
+    "toronto",
+    "maple leafs",
+    "leafs"
+  ],
+  "NSH": [
+    "nashville",
+    "predators"
+  ],
+  "OTT": [
+    "ottawa",
+    "senators"
+  ],
+  "MTL": [
+    "montreal",
+    "canadiens"
+  ]
+};
 
   function matchesTeam(cellVal, targetAbbr) {
     const v = String(cellVal||"").trim();
@@ -3881,37 +3956,73 @@ let allGamesRaw    = [];
 
 // Full team name lookup from abbreviation (for display)
 const ABBR_TO_FULL = {
-  CAR:"Carolina Hurricanes", CBJ:"Columbus Blue Jackets",
-  SJS:"San Jose Sharks",     LAK:"LA Kings",
-  DAL:"Dallas Stars",        VGK:"Vegas Golden Knights",
-  TOR:"Toronto Maple Leafs", NSH:"Nashville Predators",
-  OTT:"Ottawa Senators",     MTL:"Montreal Canadiens",
+  "CAR": "Carolina Hurricanes",
+  "CBJ": "Columbus Blue Jackets",
+  "SJS": "San Jose Sharks",
+  "LAK": "LA Kings",
+  "DAL": "Dallas Stars",
+  "VGK": "Vegas Golden Knights",
+  "TOR": "Toronto Maple Leafs",
+  "NSH": "Nashville Predators",
+  "OTT": "Ottawa Senators",
+  "MTL": "Montreal Canadiens"
 };
 
 const TEAM_LOGO_FILES = {
-  CAR:"Carolina Hurricanes.png",
-  CBJ:"Columbus Blue Jackets.png",
-  SJS:"San Jose Sharks.png",
-  LAK:"Los Angeles Kings.png",
-  DAL:"Dallas Stars.png",
-  VGK:"Vegas Golden Knights.png",
-  TOR:"Toronto Maple Leafs.png",
-  NSH:"Nashville Predators.png",
-  OTT:"Ottawa Senators.png",
-  MTL:"Montréal Canadiens.png",
+  "CAR": "Carolina Hurricanes.png",
+  "CBJ": "Columbus Blue Jackets.png",
+  "SJS": "San Jose Sharks.png",
+  "LAK": "Los Angeles Kings.png",
+  "DAL": "Dallas Stars.png",
+  "VGK": "Vegas Golden Knights.png",
+  "TOR": "Toronto Maple Leafs.png",
+  "NSH": "Nashville Predators.png",
+  "OTT": "Ottawa Senators.png",
+  "MTL": "Montréal Canadiens.png"
 };
 
 const ABBR_TO_KEYWORDS = {
-  "CAR": ["carolina","hurricanes"],
-  "CBJ": ["columbus"],
-  "SJS": ["san jose","sharks"],
-  "LAK": ["la kings","kings","angeles"],
-  "DAL": ["dallas","stars"],
-  "VGK": ["golden knights","vegas"],
-  "TOR": ["toronto","maple leafs","leafs"],
-  "NSH": ["nashville","predators"],
-  "OTT": ["ottawa","senators"],
-  "MTL": ["montreal","canadiens"],
+  "CAR": [
+    "carolina",
+    "hurricanes"
+  ],
+  "CBJ": [
+    "columbus"
+  ],
+  "SJS": [
+    "san jose",
+    "sharks"
+  ],
+  "LAK": [
+    "la kings",
+    "kings",
+    "angeles"
+  ],
+  "DAL": [
+    "dallas",
+    "stars"
+  ],
+  "VGK": [
+    "golden knights",
+    "vegas"
+  ],
+  "TOR": [
+    "toronto",
+    "maple leafs",
+    "leafs"
+  ],
+  "NSH": [
+    "nashville",
+    "predators"
+  ],
+  "OTT": [
+    "ottawa",
+    "senators"
+  ],
+  "MTL": [
+    "montreal",
+    "canadiens"
+  ]
 };
 
 // Map team name variants to abbreviation (for game log lookup)
@@ -4029,7 +4140,7 @@ async function loadGames() {
     allGamesRaw = gl.rows.filter(r => {
       const mid = String(r[glMidIdx]||r[0]||"").trim();
       const stitched = String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase();
-      if ((!mid || mid === "Match ID") && stitched !== "FORFEIT" && !looksLikeManualForfeitRow(r, glIdx)) return false;
+      if ((!mid || mid === "Match ID") && stitched !== "FORFEIT") return false;
       // Skip mangled lagout rows — they won't match any skater log entry
       // We identify them by checking if this ID is a first-part of a lagout
       // but only if the full compound version exists in skater log
@@ -4075,7 +4186,9 @@ async function loadGames() {
       });
     });
     console.log("Forfeit rows kept:", allGamesRaw.filter(r => {
-      return isForfeitGameRow(r, glIdx);
+      const mid = String(r[glMidIdx]||r[0]||"").trim().toUpperCase();
+      const stitched = String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase();
+      return isForfeitMatchId(mid) || stitched === "FORFEIT";
     }).length);
     const sel = document.getElementById("game-team-filter");
     sel.innerHTML = `<option value="">All Teams</option>`;
@@ -4145,20 +4258,15 @@ function renderGames() {
     const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
     const t1    = displayTeamName(r[glIdx["Team 1"]]);
     const t2    = displayTeamName(r[glIdx["Team 2"]]);
-    let s1      = String(r[glIdx["Team 1 Score"]]||"").trim();
-    let s2      = String(r[glIdx["Team 2 Score"]]||"").trim();
+    const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
+    const s2    = String(r[glIdx["Team 2 Score"]]||"0").trim();
     const r1    = String(r[glIdx["Team 1 Result"]]||"").trim();
     const r2    = String(r[glIdx["Team 2 Result"]]||"").trim();
     const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
     const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
     const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-    const forfeit = isForfeitGameRow(r, glIdx);
-    if (forfeit && (!s1 || !s2)) {
-      if (r1 === "Win" && r2 === "Loss") { s1 = s1 || "1"; s2 = s2 || "0"; }
-      else if (r2 === "Win" && r1 === "Loss") { s1 = s1 || "0"; s2 = s2 || "1"; }
-    }
-    s1 = s1 || "0";
-    s2 = s2 || "0";
+    const forfeit = isForfeitMatchId(matchId) ||
+      String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
     const t1wins = r1 === "Win";
     const t2wins = r2 === "Win";
 
@@ -4227,43 +4335,8 @@ function isForfeitMatchId(mid) {
     if (Number.isFinite(parsed)) numeric = Math.trunc(parsed).toString();
   }
   if (!/^\d{14}$/.test(numeric)) return false;
-  if (/^20\d{12}$/.test(numeric)) {
-    const year = Number(numeric.slice(0, 4));
-    const month = Number(numeric.slice(4, 6));
-    const day = Number(numeric.slice(6, 8));
-    const check = new Date(`${numeric.slice(0, 4)}-${numeric.slice(4, 6)}-${numeric.slice(6, 8)}T12:00:00`);
-    if (year >= 2020 && month >= 1 && month <= 12 && day >= 1 && day <= 31 && !Number.isNaN(check.getTime())) {
-      return true;
-    }
-  }
   const suffix = numeric.slice(8);
   return /^[1-9]{6}$/.test(suffix) && new Set(suffix.split("")).size === 1;
-}
-
-function gameCell(row, idx, col) {
-  const pos = idx[col];
-  return pos === undefined ? "" : String(row[pos] || "").trim();
-}
-
-function looksLikeManualForfeitRow(row, idx) {
-  const matchId = gameCell(row, idx, "Match ID");
-  const team1 = gameCell(row, idx, "Team 1");
-  const team2 = gameCell(row, idx, "Team 2");
-  const id1 = gameCell(row, idx, "Team 1 ID");
-  const id2 = gameCell(row, idx, "Team 2 ID");
-  const r1 = gameCell(row, idx, "Team 1 Result").toUpperCase();
-  const r2 = gameCell(row, idx, "Team 2 Result").toUpperCase();
-  const stitched = gameCell(row, idx, "Stitched Match IDs").toUpperCase();
-  const ended = gameCell(row, idx, "Ended Early").toUpperCase();
-  const hasDecision = (r1 === "WIN" && r2 === "LOSS") || (r2 === "WIN" && r1 === "LOSS");
-  return !matchId && team1 && team2 && !id1 && !id2 && hasDecision && (stitched.includes("FORFEIT") || ended === "YES" || ended === "FORFEIT");
-}
-
-function isForfeitGameRow(row, idx) {
-  const matchId = gameCell(row, idx, "Match ID");
-  const stitched = gameCell(row, idx, "Stitched Match IDs").toUpperCase();
-  const ended = gameCell(row, idx, "Ended Early").toUpperCase();
-  return isForfeitMatchId(matchId) || stitched.includes("FORFEIT") || ended === "FORFEIT" || looksLikeManualForfeitRow(row, idx);
 }
 
 function formatGameDateHeader(d) {
@@ -4279,20 +4352,15 @@ function gameCardHtml(r, gameIdx, glIdx, source) {
   const timeOnly = fullDate.includes(" ") ? fullDate.split(" ")[1] : "";
   const t1    = displayTeamName(r[glIdx["Team 1"]]);
   const t2    = displayTeamName(r[glIdx["Team 2"]]);
-  let s1      = String(r[glIdx["Team 1 Score"]]||"").trim();
-  let s2      = String(r[glIdx["Team 2 Score"]]||"").trim();
+  const s1    = String(r[glIdx["Team 1 Score"]]||"0").trim();
+  const s2    = String(r[glIdx["Team 2 Score"]]||"0").trim();
   const r1    = String(r[glIdx["Team 1 Result"]]||"").trim();
   const r2    = String(r[glIdx["Team 2 Result"]]||"").trim();
   const ot    = String(r[glIdx["OT"]]||"").trim().toLowerCase() === "yes";
   const early = String(r[glIdx["Ended Early"]]||"").trim().toLowerCase() === "yes";
   const lagout= String(r[glIdx["Lagout"]]||"").trim().toLowerCase() === "yes";
-  const forfeit = isForfeitGameRow(r, glIdx);
-  if (forfeit && (!s1 || !s2)) {
-    if (r1 === "Win" && r2 === "Loss") { s1 = s1 || "1"; s2 = s2 || "0"; }
-    else if (r2 === "Win" && r1 === "Loss") { s1 = s1 || "0"; s2 = s2 || "1"; }
-  }
-  s1 = s1 || "0";
-  s2 = s2 || "0";
+  const forfeit = isForfeitMatchId(matchId) ||
+    String(r[glIdx["Stitched Match IDs"]]||"").trim().toUpperCase() === "FORFEIT";
   const t1wins = r1 === "Win";
   const t2wins = r2 === "Win";
 
@@ -4578,6 +4646,11 @@ const RATING_CFG = {
     fallbackLow: 0.34,
     fallbackHigh: 0.76,
   },
+  volumeCredit: 0.22,
+  volumePtsWeight: 0.55,
+  volumePctLow: 0.30,
+  volumePctHigh: 0.92,
+  volumeFallback: { ptsLow: 20, ptsHigh: 110, gLow: 8, gHigh: 55 },
 };
 
 const STAT_ANCHORS = {
@@ -4656,10 +4729,12 @@ function percentile(sortedAsc, p) {
 
 let _baselineCache = null;
 let _calibCache = null;
+let _volumeCache = null;
 
 function resetRatingCaches() {
   _baselineCache = null;
   _calibCache = null;
+  _volumeCache = null;
 }
 
 const _bakedPrior = {
@@ -4754,7 +4829,45 @@ function skaterComposite(stats, defenseShare) {
     const discipline = 0.5 * q.passPct + 0.5 * q.giveaway;
     score *= RATING_CFG.gateFloor + (1 - RATING_CFG.gateFloor) * discipline;
   }
+  if (RATING_CFG.volumeCredit > 0) {
+    const v = volumeBenchmarks();
+    const span = (low, high, value) => clampRating((parseStatNumber(value) - low) / (high - low), 0, 1);
+    const volume = RATING_CFG.volumePtsWeight * span(v.ptsLow, v.ptsHigh, stats["PTS"])
+      + (1 - RATING_CFG.volumePtsWeight) * span(v.gLow, v.gHigh, stats["G"]);
+    score = score * (1 - RATING_CFG.volumeCredit) + volume * RATING_CFG.volumeCredit;
+  }
   return clampRating(score, 0, 1);
+}
+
+function volumeBenchmarks() {
+  if (_volumeCache) return _volumeCache;
+  const fallback = RATING_CFG.volumeFallback;
+  try {
+    const src = _playerSource();
+    const cfg = RATING_CFG.calib;
+    if (!src) { _volumeCache = { ...fallback }; return _volumeCache; }
+    const idx = _colIndex(src), pts = [], goals = [];
+    src.rows.forEach(row => {
+      if (parseStatNumber(row[idx["GP"]]) < cfg.qualifyGp) return;
+      if (posShort(row[idx["Position"]]) === "G") return;
+      pts.push(parseStatNumber(row[idx["PTS"]]));
+      goals.push(parseStatNumber(row[idx["G"]]));
+    });
+    if (pts.length < cfg.minSkaters) { _volumeCache = { ...fallback }; return _volumeCache; }
+    pts.sort((a, b) => a - b);
+    goals.sort((a, b) => a - b);
+    _volumeCache = {
+      ptsLow: percentile(pts, RATING_CFG.volumePctLow),
+      ptsHigh: percentile(pts, RATING_CFG.volumePctHigh),
+      gLow: percentile(goals, RATING_CFG.volumePctLow),
+      gHigh: percentile(goals, RATING_CFG.volumePctHigh),
+    };
+    if (_volumeCache.ptsHigh - _volumeCache.ptsLow < 5) _volumeCache.ptsHigh = _volumeCache.ptsLow + 5;
+    if (_volumeCache.gHigh - _volumeCache.gLow < 3) _volumeCache.gHigh = _volumeCache.gLow + 3;
+  } catch (err) {
+    _volumeCache = { ...fallback };
+  }
+  return _volumeCache;
 }
 
 function ratingCalibration() {
