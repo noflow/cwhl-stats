@@ -4581,6 +4581,9 @@ const RATING_CFG = {
     fallbackHigh: 0.82,
   },
   volumeCredit: 0.22,
+  forwardPaceCredit: 0.22,
+  defenseVolumeCredit: 0.16,
+  forwardPaceWeights: { pts: 0.50, gpg: 0.25, apg: 0.25 },
   volumePtsWeight: 0.55,
   volumePctLow: 0.30,
   volumePctHigh: 0.92,
@@ -4786,13 +4789,17 @@ function skaterComposite(stats, defenseShare) {
     const discipline = 0.5 * q.passPct + 0.5 * q.giveaway;
     score *= RATING_CFG.gateFloor + (1 - RATING_CFG.gateFloor) * discipline;
   }
-  if (RATING_CFG.volumeCredit > 0) {
-    const groupKey = defenseShare >= 0.5 ? "D" : "F";
-    const v = volumeBenchmarks()[groupKey];
+  if (group === "F" && RATING_CFG.forwardPaceCredit > 0) {
+    const weights = RATING_CFG.forwardPaceWeights || { pts: 0.50, gpg: 0.25, apg: 0.25 };
+    const pace = (q.pts * weights.pts) + (q.gpg * weights.gpg) + (q.apg * weights.apg);
+    score = score * (1 - RATING_CFG.forwardPaceCredit) + pace * RATING_CFG.forwardPaceCredit;
+  }
+  if (group === "D" && RATING_CFG.defenseVolumeCredit > 0) {
+    const v = volumeBenchmarks().D;
     const span = (low, high, value) => clampRating((parseStatNumber(value) - low) / (high - low), 0, 1);
     const volume = RATING_CFG.volumePtsWeight * span(v.ptsLow, v.ptsHigh, stats["PTS"])
       + (1 - RATING_CFG.volumePtsWeight) * span(v.gLow, v.gHigh, stats["G"]);
-    score = score * (1 - RATING_CFG.volumeCredit) + volume * RATING_CFG.volumeCredit;
+    score = score * (1 - RATING_CFG.defenseVolumeCredit) + volume * RATING_CFG.defenseVolumeCredit;
   }
   return clampRating(score, 0, 1);
 }
