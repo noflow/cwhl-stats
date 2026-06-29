@@ -4560,6 +4560,66 @@ function statGpValue(stats) {
   return parseStatNumber(stats && stats["GP"]);
 }
 
+const RATING_CFG = {
+  floor: 55,
+  ceil: 99,
+  shrinkGames: 12,
+  baselineMinGp: 3,
+  disciplineGate: true,
+  gateFloor: 0.89,
+  calib: {
+    autoFromLeague: true,
+    minSkaters: 25,
+    qualifyGp: 4,
+    pLow: 0.12,
+    pHigh: 0.95,
+    eliteRating: 94,
+    topExp: 2.2,
+    fallbackLow: 0.34,
+    fallbackHigh: 0.76,
+  },
+};
+
+const STAT_ANCHORS = {
+  pts: { floor: 0.6, elite: 3.2, perfect: 5.0 },
+  gpg: { floor: 0.2, elite: 1.7, perfect: 3.0 },
+  apg: { floor: 0.3, elite: 1.9, perfect: 3.2 },
+  shotPct: { floor: 12, elite: 32, perfect: 55 },
+  accuracy: { floor: 55, elite: 80, perfect: 100 },
+  passPct: { floor: 62, elite: 82, perfect: 100 },
+  faceoff: { floor: 38, elite: 56, perfect: 75 },
+  giveaway: { floor: 16, elite: 7, perfect: 0, lower: true },
+  penDrawn: { floor: 0.1, elite: 1.0, perfect: 2.5 },
+  plusMinus: { floor: -1.2, elite: 0.8, perfect: 1.8 },
+  takeaway: { floor: 0.5, elite: 2.8, perfect: 5.5 },
+  interception: { floor: 0.5, elite: 2.5, perfect: 5.0 },
+  blocks: { floor: 0.2, elite: 1.6, perfect: 4.0 },
+  hits: { floor: 0.5, elite: 4.0, perfect: 10 },
+  deflections: { floor: 0.1, elite: 0.6, perfect: 2.0 },
+  pkClears: { floor: 0.0, elite: 0.4, perfect: 1.5 },
+  possession: { floor: 1.0, elite: 3.5, perfect: 6.0 },
+  ea: { floor: 55, elite: 86, perfect: 100 },
+  savePct: { floor: 70, elite: 90, perfect: 100 },
+  gaa: { floor: 6.0, elite: 2.5, perfect: 1.0, lower: true },
+  winRate: { floor: 0.2, elite: 0.7, perfect: 1.0 },
+  shutouts: { floor: 0.0, elite: 0.15, perfect: 0.5 },
+  gSpecial: { floor: 50, elite: 80, perfect: 100 },
+};
+
+const FORWARD_WEIGHTS = {
+  pts: 0.23, shotPct: 0.07, gpg: 0.08, apg: 0.08, passPct: 0.08, giveaway: 0.08,
+  takeaway: 0.05, interception: 0.05, plusMinus: 0.08, faceoff: 0.04, hits: 0.03,
+  blocks: 0.02, pkClears: 0.02, penDrawn: 0.02, possession: 0.02, accuracy: 0.01, ea: 0.04,
+};
+
+const DEFENSE_WEIGHTS = {
+  pts: 0.06, shotPct: 0.02, gpg: 0.02, apg: 0.05, passPct: 0.16, giveaway: 0.15,
+  takeaway: 0.10, interception: 0.10, blocks: 0.08, plusMinus: 0.12, hits: 0.03,
+  deflections: 0.02, pkClears: 0.02, penDrawn: 0.01, possession: 0.02, ea: 0.04,
+};
+
+const GOALIE_WEIGHTS = { savePct: 0.42, gaa: 0.20, winRate: 0.15, shutouts: 0.10, gSpecial: 0.08, workload: 0.05 };
+
 function clampRating(n, min = 0, max = 100) {
   if (!isFinite(n)) return min;
   return Math.max(min, Math.min(max, n));
@@ -4570,14 +4630,92 @@ function statPerGame(stats, statName, gp) {
   return parseStatNumber(stats && stats[statName]) / gp;
 }
 
-function statScore(stats, statName, fallback = 70) {
-  const value = parseStatNumber(stats && stats[statName]);
-  return value > 0 ? clampRating(value) : fallback;
+function statQuality(value, key) {
+  const anchor = STAT_ANCHORS[key];
+  if (!anchor) return 0;
+  let x = value, floor = anchor.floor, elite = anchor.elite, perfect = anchor.perfect;
+  if (anchor.lower) { x = -x; floor = -floor; elite = -elite; perfect = -perfect; }
+  if (x <= floor) return 0;
+  if (x <= elite) return 0.90 * (x - floor) / (elite - floor);
+  if (x <= perfect) return 0.90 + 0.10 * (x - elite) / (perfect - elite);
+  return 1;
 }
 
-function scaleScore(value, eliteTarget) {
-  if (!eliteTarget) return 0;
-  return clampRating((value / eliteTarget) * 100);
+function shrink(rate, gp, prior) {
+  const C = RATING_CFG.shrinkGames;
+  if (!isFinite(rate)) rate = prior;
+  return (gp * rate + C * prior) / (gp + C);
+}
+
+function percentile(sortedAsc, p) {
+  if (!sortedAsc.length) return 0;
+  const i = clampRating(p, 0, 1) * (sortedAsc.length - 1);
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (i - lo);
+}
+
+let _baselineCache = null;
+let _calibCache = null;
+
+function resetRatingCaches() {
+  _baselineCache = null;
+  _calibCache = null;
+}
+
+const _bakedPrior = {
+  "PTS": 2.0, "G": 0.8, "A": 1.2, "Takeaways": 1.6, "Interceptions": 1.6,
+  "Blocked Shots": 0.9, "Hits": 2.2, "Giveaways": 5.5, "Deflections": 0.3,
+  "PK Zone Clears": 0.3, "Penalties Drawn": 0.6, "Possession (mins)": 2.6,
+  "Plus Minus": 0, "Shot %": 24, "Shots On Net %": 75, "Pass %": 74, "Faceoff %": 50,
+};
+
+function _playerSource() {
+  if (typeof activePlayerSeason !== "undefined" && activePlayerSeason === "playoffs" && playoffPlayerData?.rows?.length) {
+    return playoffPlayerData;
+  }
+  return (typeof playerData !== "undefined" && playerData.rows && playerData.rows.length) ? playerData : null;
+}
+
+function _colIndex(src) {
+  const idx = {};
+  src.cols.forEach((col, i) => { idx[String(col).trim()] = i; });
+  return idx;
+}
+
+function _rowToStats(row, idx) {
+  const stats = {};
+  Object.keys(idx).forEach(key => { stats[key] = row[idx[key]]; });
+  return stats;
+}
+
+function leagueBaselines() {
+  if (_baselineCache) return _baselineCache;
+  const perGame = ["PTS", "G", "A", "Takeaways", "Interceptions", "Blocked Shots", "Hits", "Giveaways", "Deflections", "PK Zone Clears", "Penalties Drawn", "Possession (mins)", "Plus Minus"];
+  const pct = ["Shot %", "Shots On Net %", "Pass %", "Faceoff %"];
+  const fallback = { F: { ..._bakedPrior }, D: { ..._bakedPrior } };
+  try {
+    const src = _playerSource();
+    if (!src) { _baselineCache = fallback; return _baselineCache; }
+    const idx = _colIndex(src);
+    const get = (row, name) => idx[name] != null ? parseStatNumber(row[idx[name]]) : 0;
+    const sum = { F: {}, D: {} }, count = { F: 0, D: 0 };
+    src.rows.forEach(row => {
+      const gp = get(row, "GP");
+      if (gp < RATING_CFG.baselineMinGp) return;
+      const group = posShort(row[idx["Position"]]) === "D" ? "D" : "F";
+      count[group] += 1;
+      perGame.forEach(stat => { sum[group][stat] = (sum[group][stat] || 0) + get(row, stat) / gp; });
+      pct.forEach(stat => { sum[group][stat] = (sum[group][stat] || 0) + get(row, stat); });
+    });
+    ["F", "D"].forEach(group => {
+      if (!count[group]) { sum[group] = { ..._bakedPrior }; return; }
+      Object.keys(sum[group]).forEach(stat => { sum[group][stat] /= count[group]; });
+    });
+    _baselineCache = sum;
+  } catch (err) {
+    _baselineCache = fallback;
+  }
+  return _baselineCache;
 }
 
 function defenseSkaterGameShare(playerName, stats) {
@@ -4588,172 +4726,103 @@ function defenseSkaterGameShare(playerName, stats) {
   return clampRating((defense?.games || 0) / total, 0, 1);
 }
 
-function calculateSkaterOverall(stats, playerName = "") {
+function skaterComposite(stats, defenseShare) {
   const gp = Math.max(1, statGpValue(stats));
-  const defenseShare = defenseSkaterGameShare(playerName, stats);
-  const ptsPerGame = parseStatNumber(stats["Pts/GP"]) || statPerGame(stats, "PTS", gp);
-  const goalsPerGame = parseStatNumber(stats["G/GP"]) || statPerGame(stats, "G", gp);
-  const assistsPerGame = parseStatNumber(stats["A/GP"]) || statPerGame(stats, "A", gp);
-  const plusPerGame = statPerGame(stats, "Plus Minus", gp);
-
-  const scoring = scaleScore(ptsPerGame, 4.25);
-  const goals = scaleScore(goalsPerGame, 2.2);
-  const assists = scaleScore(assistsPerGame, 2.8);
-  const specialTeams = scaleScore(
-    statPerGame(stats, "PPG", gp) +
-    statPerGame(stats, "SHG", gp) +
-    statPerGame(stats, "GWGs", gp),
-    0.9
-  );
-  const shooting = clampRating(
-    scaleScore(parseStatNumber(stats["Shots On Net %"]), 72) * 0.58 +
-    scaleScore(parseStatNumber(stats["EV Sh%"]), 35) * 0.22 +
-    scaleScore(statPerGame(stats, "Shots", gp), 6.5) * 0.20
-  );
-  const offensiveProduction = clampRating(
-    scoring * 0.36 +
-    goals * 0.18 +
-    assists * 0.18 +
-    shooting * 0.16 +
-    specialTeams * 0.12
-  );
-
-  const takeawaysPg = statPerGame(stats, "Takeaways", gp);
-  const blocksPg = statPerGame(stats, "Blocked Shots", gp);
-  const interceptionsPg = statPerGame(stats, "Interceptions", gp);
-  const deflectionsPg = statPerGame(stats, "Deflections", gp);
-  const pkClearsPg = statPerGame(stats, "PK Zone Clears", gp);
-  const giveawaysPg = statPerGame(stats, "Giveaways", gp);
-  const giveawayControl = clampRating(100 - scaleScore(giveawaysPg, 7));
-  const plusMinusScore = clampRating(((plusPerGame + 1.0) / 4.0) * 100);
-  const standardDefenseImpact = clampRating(
-    scaleScore(takeawaysPg, 3.4) * 0.28 +
-    scaleScore(blocksPg, 2.1) * 0.20 +
-    scaleScore(interceptionsPg, 2.3) * 0.18 +
-    scaleScore(deflectionsPg, 1.6) * 0.08 +
-    scaleScore(pkClearsPg, 1.6) * 0.10 +
-    plusMinusScore * 0.10 +
-    giveawayControl * 0.06
-  );
-  const defensemanDefenseImpact = clampRating(
-    scaleScore(takeawaysPg, 3.2) * 0.36 +
-    scaleScore(interceptionsPg, 2.4) * 0.26 +
-    scaleScore(blocksPg, 2.0) * 0.17 +
-    scaleScore(deflectionsPg, 1.5) * 0.07 +
-    scaleScore(pkClearsPg, 1.5) * 0.08 +
-    plusMinusScore * 0.04 +
-    giveawayControl * 0.02
-  );
-  const defenseImpact = standardDefenseImpact * (1 - defenseShare) + defensemanDefenseImpact * defenseShare;
-
-  const physical = clampRating(
-    scaleScore(statPerGame(stats, "Hits", gp), 10) * 0.78 +
-    scaleScore(statPerGame(stats, "Penalties Drawn", gp), 1.1) * 0.22
-  );
-  const puck = clampRating(
-    scaleScore(parseStatNumber(stats["Pass %"]), 86) * 0.54 +
-    scaleScore(parseStatNumber(stats["Shots On Net %"]), 72) * 0.20 +
-    scaleScore(parseStatNumber(stats["Faceoff %"]), 62) * 0.12 +
-    scaleScore(statPerGame(stats, "Possession (mins)", gp), 2.4) * 0.14
-  );
-  const discipline = clampRating(
-    (100 - scaleScore(statPerGame(stats, "PIMs", gp), 3.2)) * 0.70 +
-    scaleScore(statPerGame(stats, "Penalties Drawn", gp), 1.1) * 0.30
-  );
-  const ratingsBlend = clampRating(
-    statScore(stats, "Offense Rating") * 0.34 +
-    statScore(stats, "Defense Rating") * 0.36 +
-    statScore(stats, "Teamplay Rating") * 0.30
-  );
-
-  const defenseComponent = offensiveProduction * 0.14 + defenseImpact * 0.34 + ratingsBlend * 0.22 + puck * 0.09 + physical * 0.12 + discipline * 0.09;
-  const forwardComponent = offensiveProduction * 0.28 + defenseImpact * 0.18 + ratingsBlend * 0.24 + puck * 0.12 + physical * 0.10 + discipline * 0.08;
-  const component = defenseComponent * defenseShare + forwardComponent * (1 - defenseShare);
-
-  const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
-  const defensemanBoost = defenseShare * (
-    0.8 +
-    scaleScore(defensemanDefenseImpact, 100) * 1.6 +
-    (takeawaysPg >= 3 ? 0.35 : 0) +
-    (interceptionsPg >= 2 ? 0.35 : 0)
-  );
-  const forwardShare = 1 - defenseShare;
-  const forwardBoost = forwardShare * (
-    0.8 +
-    (offensiveProduction >= 80 ? 0.5 : 0) +
-    (offensiveProduction >= 92 ? 0.35 : 0) +
-    (puck >= 86 ? 0.2 : 0)
-  );
-  const defenseRaw = 60 + defenseComponent * 0.34 + defensemanBoost;
-  const forwardRaw = 64 + forwardComponent * 0.32 + forwardBoost;
-  const rawRating = defenseRaw * defenseShare + forwardRaw * forwardShare + gpAdjustment;
-
-  const isMostlyDefense = defenseShare >= 0.5;
-  let ratingCap = 88;
-  if (isMostlyDefense) {
-    const defenseProfile = Math.max(defensemanDefenseImpact, offensiveProduction);
-    ratingCap = 79;
-    if (defenseProfile >= 52) ratingCap = 81;
-    if (defenseProfile >= 60) ratingCap = 84;
-    if (defenseProfile >= 68) ratingCap = 86;
-    if (defenseProfile >= 76 && ratingsBlend >= 70) ratingCap = 88;
-    if (defenseProfile >= 84 && ratingsBlend >= 76) ratingCap = 90;
-    if (defenseProfile >= 90 && ratingsBlend >= 82 && component >= 86) ratingCap = 91;
-    if (defenseProfile >= 95 && defensemanDefenseImpact >= 92 && ratingsBlend >= 86 && component >= 91) ratingCap = 93;
-  } else {
-    const forwardProfile = Math.max(offensiveProduction, puck);
-    ratingCap = 79;
-    if (forwardProfile >= 52) ratingCap = 81;
-    if (forwardProfile >= 60) ratingCap = 84;
-    if (forwardProfile >= 68) ratingCap = 86;
-    if (forwardProfile >= 76 && component >= 70) ratingCap = 88;
-    if (forwardProfile >= 84 && component >= 78) ratingCap = 90;
-    if (forwardProfile >= 89 && component >= 84 && ratingsBlend >= 76) ratingCap = 92;
-    if (forwardProfile >= 93 && offensiveProduction >= 90 && component >= 88 && ratingsBlend >= 80) ratingCap = 94;
-    if (forwardProfile >= 97 && offensiveProduction >= 95 && component >= 92 && ratingsBlend >= 84) ratingCap = 96;
+  const base = leagueBaselines();
+  const group = defenseShare >= 0.5 ? "D" : "F";
+  const prior = key => (base[group] && base[group][key] != null) ? base[group][key] : (_bakedPrior[key] || 0);
+  const pg = col => shrink(statPerGame(stats, col, gp), gp, prior(col));
+  const pct = col => shrink(parseStatNumber(stats[col]), gp, prior(col));
+  const ptsPg = shrink(parseStatNumber(stats["Pts/GP"]) || statPerGame(stats, "PTS", gp), gp, prior("PTS"));
+  const gPg = shrink(parseStatNumber(stats["G/GP"]) || statPerGame(stats, "G", gp), gp, prior("G"));
+  const aPg = shrink(parseStatNumber(stats["A/GP"]) || statPerGame(stats, "A", gp), gp, prior("A"));
+  const eaAvg = (parseStatNumber(stats["Offense Rating"]) + parseStatNumber(stats["Defense Rating"]) + parseStatNumber(stats["Teamplay Rating"])) / 3;
+  const q = {
+    pts: statQuality(ptsPg, "pts"), gpg: statQuality(gPg, "gpg"), apg: statQuality(aPg, "apg"),
+    shotPct: statQuality(pct("Shot %"), "shotPct"), accuracy: statQuality(pct("Shots On Net %"), "accuracy"),
+    passPct: statQuality(pct("Pass %"), "passPct"), faceoff: statQuality(pct("Faceoff %"), "faceoff"),
+    plusMinus: statQuality(pg("Plus Minus"), "plusMinus"), takeaway: statQuality(pg("Takeaways"), "takeaway"),
+    interception: statQuality(pg("Interceptions"), "interception"), blocks: statQuality(pg("Blocked Shots"), "blocks"),
+    hits: statQuality(pg("Hits"), "hits"), deflections: statQuality(pg("Deflections"), "deflections"),
+    pkClears: statQuality(pg("PK Zone Clears"), "pkClears"), penDrawn: statQuality(pg("Penalties Drawn"), "penDrawn"),
+    giveaway: statQuality(pg("Giveaways"), "giveaway"), possession: statQuality(pg("Possession (mins)"), "possession"),
+    ea: statQuality(eaAvg, "ea"),
+  };
+  const weighted = weights => Object.keys(weights).reduce((sum, key) => sum + (q[key] || 0) * weights[key], 0);
+  let score = weighted(DEFENSE_WEIGHTS) * defenseShare + weighted(FORWARD_WEIGHTS) * (1 - defenseShare);
+  if (RATING_CFG.disciplineGate) {
+    const discipline = 0.5 * q.passPct + 0.5 * q.giveaway;
+    score *= RATING_CFG.gateFloor + (1 - RATING_CFG.gateFloor) * discipline;
   }
-  return Math.round(clampRating(rawRating, 70, ratingCap));
+  return clampRating(score, 0, 1);
+}
+
+function ratingCalibration() {
+  if (_calibCache) return _calibCache;
+  const cfg = RATING_CFG.calib;
+  let low = cfg.fallbackLow, high = cfg.fallbackHigh;
+  try {
+    const src = _playerSource();
+    if (src && cfg.autoFromLeague) {
+      const idx = _colIndex(src), comps = [];
+      src.rows.forEach(row => {
+        const gp = parseStatNumber(row[idx["GP"]]);
+        if (gp < cfg.qualifyGp) return;
+        const defenseShare = posShort(row[idx["Position"]]) === "D" ? 1 : 0;
+        comps.push(skaterComposite(_rowToStats(row, idx), defenseShare));
+      });
+      if (comps.length >= cfg.minSkaters) {
+        comps.sort((a, b) => a - b);
+        low = percentile(comps, cfg.pLow);
+        high = percentile(comps, cfg.pHigh);
+        if (high - low < 0.05) high = low + 0.05;
+      }
+    }
+  } catch (err) {}
+  _calibCache = { low, high };
+  return _calibCache;
+}
+
+function compositeToRating(score) {
+  const cfg = RATING_CFG.calib;
+  const { low, high } = ratingCalibration();
+  const floor = RATING_CFG.floor, ceil = RATING_CFG.ceil, elite = cfg.eliteRating;
+  let rating;
+  if (score <= high) {
+    rating = floor + (score - low) / (high - low) * (elite - floor);
+  } else {
+    rating = elite + (ceil - elite) * Math.pow((score - high) / (1 - high), cfg.topExp);
+  }
+  return Math.round(clampRating(rating, floor, ceil));
+}
+
+function calculateSkaterOverall(stats, playerName = "") {
+  const defenseShare = defenseSkaterGameShare(playerName, stats);
+  return compositeToRating(skaterComposite(stats, defenseShare));
 }
 
 function calculateGoalieOverall(stats) {
   const gp = Math.max(1, statGpValue(stats));
-  const savePct = parseStatNumber(stats["Save %"]);
-  const gaa = parseStatNumber(stats["GAA"]);
-  const winsPerGame = statPerGame(stats, "W", gp);
-  const shotsAgainstPerGame = statPerGame(stats, "Shots Against", gp);
-  const savesPerGame = statPerGame(stats, "Saves", gp);
-  const breakawaySavePct = parseStatNumber(stats["Breakaway Save %"]);
-  const penaltySavePct = parseStatNumber(stats["Penalty Shot Save %"]);
-
-  const saveScore = clampRating(((savePct - 55) / 40) * 100);
-  const gaaScore = gaa > 0 ? clampRating(((7 - gaa) / 6) * 100) : 90;
-  const winScore = scaleScore(winsPerGame, 0.85);
-  const workloadScore = scaleScore(shotsAgainstPerGame, 18);
-  const savesScore = scaleScore(savesPerGame, 17);
-  const specialScore = Math.max(
-    breakawaySavePct ? scaleScore(breakawaySavePct, 85) : 0,
-    penaltySavePct ? scaleScore(penaltySavePct, 85) : 0
-  );
-  const supportScore = scaleScore(statPerGame(stats, "PK Zone Clears", gp), 1.5);
-
-  const component =
-    saveScore * 0.36 +
-    gaaScore * 0.22 +
-    winScore * 0.16 +
-    workloadScore * 0.09 +
-    savesScore * 0.07 +
-    specialScore * 0.05 +
-    supportScore * 0.05;
-
-  const gpAdjustment = gp < 3 ? -5 : (gp < 6 ? -2 : 0);
-  return Math.round(clampRating(55 + component * 0.44 + gpAdjustment, 55, 99));
+  const savePct = shrink(parseStatNumber(stats["Save %"]), gp, 84);
+  const gaa = parseStatNumber(stats["GAA"]) || 3.2;
+  const winRate = shrink(statPerGame(stats, "W", gp), gp, 0.5);
+  const shutout = statPerGame(stats, "Shutouts", gp) || statPerGame(stats, "SO", gp);
+  const special = Math.max(parseStatNumber(stats["Breakaway Save %"]), parseStatNumber(stats["Penalty Shot Save %"]));
+  const shotsAgainstPg = statPerGame(stats, "Shots Against", gp);
+  const q = {
+    savePct: statQuality(savePct, "savePct"), gaa: statQuality(gaa, "gaa"), winRate: statQuality(winRate, "winRate"),
+    shutouts: statQuality(shutout, "shutouts"), gSpecial: special ? statQuality(special, "gSpecial") : 0.5,
+    workload: clampRating(shotsAgainstPg / 22, 0, 1),
+  };
+  let score = Object.keys(GOALIE_WEIGHTS).reduce((sum, key) => sum + q[key] * GOALIE_WEIGHTS[key], 0);
+  if (RATING_CFG.disciplineGate) score *= RATING_CFG.gateFloor + (1 - RATING_CFG.gateFloor) * q.savePct;
+  return compositeToRating(clampRating(score, 0, 1));
 }
 
 function calculatePlayerOverall(stats, role, playerName = "") {
   if (!stats) return null;
   return role === "goalie" ? calculateGoalieOverall(stats) : calculateSkaterOverall(stats, playerName);
 }
-
 function renderOverallBadge(stats, role, playerName = "") {
   const overall = calculatePlayerOverall(stats, role, playerName);
   if (!overall) return "";
