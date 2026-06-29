@@ -4639,9 +4639,11 @@ const RATING_CFG = {
     autoFromLeague: true,
     minSkaters: 25,
     qualifyGp: 4,
+    minGoalies: 6,
+    goalieQualifyGp: 3,
     pLow: 0.12,
     pHigh: 0.95,
-    eliteRating: 94,
+    eliteRating: 96,
     topExp: 2.2,
     fallbackLow: 0.34,
     fallbackHigh: 0.76,
@@ -4650,7 +4652,13 @@ const RATING_CFG = {
   volumePtsWeight: 0.55,
   volumePctLow: 0.30,
   volumePctHigh: 0.92,
-  volumeFallback: { ptsLow: 20, ptsHigh: 110, gLow: 8, gHigh: 55 },
+  volumeFallback: {
+    ptsLow: 20,
+    ptsHigh: 110,
+    gLow: 8,
+    gHigh: 55,
+    D: { ptsLow: 10, ptsHigh: 55, gLow: 2, gHigh: 18 },
+  },
 };
 
 const STAT_ANCHORS = {
@@ -4672,11 +4680,11 @@ const STAT_ANCHORS = {
   pkClears: { floor: 0.0, elite: 0.4, perfect: 1.5 },
   possession: { floor: 1.0, elite: 3.5, perfect: 6.0 },
   ea: { floor: 55, elite: 86, perfect: 100 },
-  savePct: { floor: 70, elite: 90, perfect: 100 },
-  gaa: { floor: 6.0, elite: 2.5, perfect: 1.0, lower: true },
+  savePct: { floor: 62, elite: 85, perfect: 100 },
+  gaa: { floor: 7.0, elite: 3.0, perfect: 1.2, lower: true },
   winRate: { floor: 0.2, elite: 0.7, perfect: 1.0 },
-  shutouts: { floor: 0.0, elite: 0.15, perfect: 0.5 },
-  gSpecial: { floor: 50, elite: 80, perfect: 100 },
+  shutouts: { floor: 0.0, elite: 0.12, perfect: 0.4 },
+  gSpecial: { floor: 45, elite: 78, perfect: 100 },
 };
 
 const FORWARD_WEIGHTS = {
@@ -4730,11 +4738,13 @@ function percentile(sortedAsc, p) {
 let _baselineCache = null;
 let _calibCache = null;
 let _volumeCache = null;
+let _goalieCalibCache = null;
 
 function resetRatingCaches() {
   _baselineCache = null;
   _calibCache = null;
   _volumeCache = null;
+  _goalieCalibCache = null;
 }
 
 const _bakedPrior = {
@@ -4749,6 +4759,13 @@ function _playerSource() {
     return playoffPlayerData;
   }
   return (typeof playerData !== "undefined" && playerData.rows && playerData.rows.length) ? playerData : null;
+}
+
+function _goalieSource() {
+  if (typeof activeGoalieSeason !== "undefined" && activeGoalieSeason === "playoffs" && playoffGoalieData?.rows?.length) {
+    return playoffGoalieData;
+  }
+  return (typeof goalieData !== "undefined" && goalieData.rows && goalieData.rows.length) ? goalieData : null;
 }
 
 function _colIndex(src) {
@@ -4830,7 +4847,8 @@ function skaterComposite(stats, defenseShare) {
     score *= RATING_CFG.gateFloor + (1 - RATING_CFG.gateFloor) * discipline;
   }
   if (RATING_CFG.volumeCredit > 0) {
-    const v = volumeBenchmarks();
+    const groupKey = defenseShare >= 0.5 ? "D" : "F";
+    const v = volumeBenchmarks()[groupKey];
     const span = (low, high, value) => clampRating((parseStatNumber(value) - low) / (high - low), 0, 1);
     const volume = RATING_CFG.volumePtsWeight * span(v.ptsLow, v.ptsHigh, stats["PTS"])
       + (1 - RATING_CFG.volumePtsWeight) * span(v.gLow, v.gHigh, stats["G"]);
@@ -4841,31 +4859,38 @@ function skaterComposite(stats, defenseShare) {
 
 function volumeBenchmarks() {
   if (_volumeCache) return _volumeCache;
-  const fallback = RATING_CFG.volumeFallback;
+  const fallbackBase = RATING_CFG.volumeFallback;
+  const fallback = { F: { ...fallbackBase }, D: { ...(fallbackBase.D || fallbackBase) } };
   try {
     const src = _playerSource();
     const cfg = RATING_CFG.calib;
-    if (!src) { _volumeCache = { ...fallback }; return _volumeCache; }
-    const idx = _colIndex(src), pts = [], goals = [];
+    if (!src) { _volumeCache = fallback; return _volumeCache; }
+    const idx = _colIndex(src), pts = { F: [], D: [] }, goals = { F: [], D: [] };
     src.rows.forEach(row => {
       if (parseStatNumber(row[idx["GP"]]) < cfg.qualifyGp) return;
-      if (posShort(row[idx["Position"]]) === "G") return;
-      pts.push(parseStatNumber(row[idx["PTS"]]));
-      goals.push(parseStatNumber(row[idx["G"]]));
+      const pos = posShort(row[idx["Position"]]);
+      if (pos === "G") return;
+      const group = pos === "D" ? "D" : "F";
+      pts[group].push(parseStatNumber(row[idx["PTS"]]));
+      goals[group].push(parseStatNumber(row[idx["G"]]));
     });
-    if (pts.length < cfg.minSkaters) { _volumeCache = { ...fallback }; return _volumeCache; }
-    pts.sort((a, b) => a - b);
-    goals.sort((a, b) => a - b);
-    _volumeCache = {
-      ptsLow: percentile(pts, RATING_CFG.volumePctLow),
-      ptsHigh: percentile(pts, RATING_CFG.volumePctHigh),
-      gLow: percentile(goals, RATING_CFG.volumePctLow),
-      gHigh: percentile(goals, RATING_CFG.volumePctHigh),
+    const build = group => {
+      if (pts[group].length < 8) return { ...(fallback[group] || fallback.F) };
+      pts[group].sort((a, b) => a - b);
+      goals[group].sort((a, b) => a - b);
+      const out = {
+        ptsLow: percentile(pts[group], RATING_CFG.volumePctLow),
+        ptsHigh: percentile(pts[group], RATING_CFG.volumePctHigh),
+        gLow: percentile(goals[group], RATING_CFG.volumePctLow),
+        gHigh: percentile(goals[group], RATING_CFG.volumePctHigh),
+      };
+      if (out.ptsHigh - out.ptsLow < 5) out.ptsHigh = out.ptsLow + 5;
+      if (out.gHigh - out.gLow < 3) out.gHigh = out.gLow + 3;
+      return out;
     };
-    if (_volumeCache.ptsHigh - _volumeCache.ptsLow < 5) _volumeCache.ptsHigh = _volumeCache.ptsLow + 5;
-    if (_volumeCache.gHigh - _volumeCache.gLow < 3) _volumeCache.gHigh = _volumeCache.gLow + 3;
+    _volumeCache = { F: build("F"), D: build("D") };
   } catch (err) {
-    _volumeCache = { ...fallback };
+    _volumeCache = fallback;
   }
   return _volumeCache;
 }
@@ -4896,9 +4921,9 @@ function ratingCalibration() {
   return _calibCache;
 }
 
-function compositeToRating(score) {
+function compositeToRating(score, calib) {
   const cfg = RATING_CFG.calib;
-  const { low, high } = ratingCalibration();
+  const { low, high } = calib || ratingCalibration();
   const floor = RATING_CFG.floor, ceil = RATING_CFG.ceil, elite = cfg.eliteRating;
   let rating;
   if (score <= high) {
@@ -4909,15 +4934,10 @@ function compositeToRating(score) {
   return Math.round(clampRating(rating, floor, ceil));
 }
 
-function calculateSkaterOverall(stats, playerName = "") {
-  const defenseShare = defenseSkaterGameShare(playerName, stats);
-  return compositeToRating(skaterComposite(stats, defenseShare));
-}
-
-function calculateGoalieOverall(stats) {
+function goalieComposite(stats) {
   const gp = Math.max(1, statGpValue(stats));
-  const savePct = shrink(parseStatNumber(stats["Save %"]), gp, 84);
-  const gaa = parseStatNumber(stats["GAA"]) || 3.2;
+  const savePct = shrink(parseStatNumber(stats["Save %"]), gp, 82);
+  const gaa = shrink(parseStatNumber(stats["GAA"]) || 3.6, gp, 3.6);
   const winRate = shrink(statPerGame(stats, "W", gp), gp, 0.5);
   const shutout = statPerGame(stats, "Shutouts", gp) || statPerGame(stats, "SO", gp);
   const special = Math.max(parseStatNumber(stats["Breakaway Save %"]), parseStatNumber(stats["Penalty Shot Save %"]));
@@ -4929,7 +4949,40 @@ function calculateGoalieOverall(stats) {
   };
   let score = Object.keys(GOALIE_WEIGHTS).reduce((sum, key) => sum + q[key] * GOALIE_WEIGHTS[key], 0);
   if (RATING_CFG.disciplineGate) score *= RATING_CFG.gateFloor + (1 - RATING_CFG.gateFloor) * q.savePct;
-  return compositeToRating(clampRating(score, 0, 1));
+  return clampRating(score, 0, 1);
+}
+
+function goalieCalibration() {
+  if (_goalieCalibCache) return _goalieCalibCache;
+  const cfg = RATING_CFG.calib;
+  let low = cfg.fallbackLow, high = cfg.fallbackHigh;
+  try {
+    const src = _goalieSource();
+    if (src && cfg.autoFromLeague) {
+      const idx = _colIndex(src), comps = [];
+      src.rows.forEach(row => {
+        if (parseStatNumber(row[idx["GP"]]) < cfg.goalieQualifyGp) return;
+        comps.push(goalieComposite(_rowToStats(row, idx)));
+      });
+      if (comps.length >= cfg.minGoalies) {
+        comps.sort((a, b) => a - b);
+        low = percentile(comps, cfg.pLow);
+        high = percentile(comps, cfg.pHigh);
+        if (high - low < 0.05) high = low + 0.05;
+      }
+    }
+  } catch (err) {}
+  _goalieCalibCache = { low, high };
+  return _goalieCalibCache;
+}
+
+function calculateSkaterOverall(stats, playerName = "") {
+  const defenseShare = defenseSkaterGameShare(playerName, stats);
+  return compositeToRating(skaterComposite(stats, defenseShare), ratingCalibration());
+}
+
+function calculateGoalieOverall(stats) {
+  return compositeToRating(goalieComposite(stats), goalieCalibration());
 }
 
 function calculatePlayerOverall(stats, role, playerName = "") {
